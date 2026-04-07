@@ -25,7 +25,8 @@ class MultiHeadSelfAttention(nn.Module):
         q_state = q.view(batch_size,seq_len,self.nums_head,self.head_dim).transpose(1,2)
         k_state = k.view(batch_size,seq_len,self.nums_head,self.head_dim).transpose(1,2)
         v_state = v.view(batch_size,seq_len,self.nums_head,self.head_dim).transpose(1,2)
-
+        
+        # q@k^t/sqrt(d)
         attn_score = q_state@k_state.transpose(-1,-2)/math.sqrt(self.head_dim)
 
         if attn_mask is not None:

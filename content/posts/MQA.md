@@ -5,6 +5,70 @@ import math
 
 # 忽略了 attention_mask, attention_dropout; 
 class GroupQueryAttention(nn.Module):
+    def __init__(self, hidden_dim, nums_query_head, nums_key_value_head):
+
+        self.hidden_dim = hidden_dim
+        self.nums_query_head = nums_query_head
+        self.nums_key_value_head = nums_key_value_head
+        self.head_dim = hidden_dim // nums_query_head
+
+        # 初始化 qkv o
+        self.q_proj = nn.Linear(hidden_dim, nums_query_head * self.head_dim)  # out feature_size (nums_head * head_dim)
+        # k v out shape (nums_key_value_head * head_dim)
+        self.k_proj = nn.Linear(hidden_dim, nums_key_value_head * self.head_dim)
+        self.v_proj = nn.Linear(hidden_dim, nums_key_value_head * self.head_dim)
+
+        self.o_proj = nn.Linear(hidden_dim, hidden_dim) # input_size nums_head * head_dim
+
+    def forward(self, X, attention_mask=None):
+        # X shape (batch, seq, hidden_dim)
+        batch_size, seq_len, hidden_dim = X.size()
+
+        # qkv projection
+        q = self.q_proj(X)  # （batch, seq, hidden_dim)
+        k = self.k_proj(X)
+        v = self.v_proj(X) 
+
+        # attention_weight 目标shape 是 (batch, nums_head, seq, seq)
+        q_state = q.view(batch_size, seq_len, self.nums_query_head, self.head_dim).transpose(1, 2)
+        k_state = k.view(batch_size, seq_len, self.nums_key_value_head, self.head_dim).transpose(1, 2)
+        v_state = v.view(batch_size, seq_len, self.nums_key_value_head, self.head_dim).transpose(1, 2)
+
+  
+  
+
+        # k v repeat； （广播操作）
+        k_state = k_state.repeat_interleave(self.nums_query_head // self.nums_key_value_head, dim=1)
+        v_state = k_state.repeat_interleave(self.nums_query_head // self.nums_key_value_head, dim=1)
+
+        attn_score = (q_state @ k_state.transpose(-1, -2)) / math.sqrt(self.head_dim)
+
+        attn_weight = torch.softmax(attn_score, dim=-1)
+        # （attention_mask 忽略） # 可以看前面的视频
+
+        output_mid = attn_weight @ v_state  # (b, nums_head, seq, head_dim)
+
+        # output projection 变成 (b, seq, hidden_dim)
+        output_mid = output_mid.transpose(1, 2).contiguous()
+        output_mid = output_mid.view(batch_size,seq_len,-1)
+        output = self.o_proj(output_mid)
+
+        return final_output
+
+# 测试
+x = torch.rand(3, 2, 512)
+net = GroupQueryAttention(512, 8, 4)
+net(x).shape
+```
+
+
+```python
+import torch
+import torch.nn as nn
+import math
+
+# 忽略了 attention_mask, attention_dropout; 
+class GroupQueryAttention(nn.Module):
     def __init__(self, hidden_dim, nums_head, nums_key_value_head):
         super().__init__()
         assert hidden_dim % nums_head == 0 # 可以整除
