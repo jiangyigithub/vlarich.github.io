@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en-us">
-  <head><script src="/vlarich.github.io/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=vlarich.github.io/livereload" data-no-instant defer></script>
+  <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     
@@ -38,12 +38,12 @@ class GRPO:
     
     
     
-      <meta name="robots" content="noindex, nofollow">
+      <meta name="robots" content="index, follow">
     
     
 
     
-<link rel="stylesheet" href="/vlarich.github.io/ananke/css/main.min.css" >
+<link rel="stylesheet" href="/vlarich.github.io/ananke/css/main.min.efe4d852f731d5d1fbb87718387202a97aafd768cdcdaed0662bbe6982e91824.css" >
 
 
 
@@ -59,12 +59,12 @@ class GRPO:
     
 
     
-      <link rel="canonical" href="http://localhost:1313/vlarich.github.io/posts/grpo/">
+      <link rel="canonical" href="https://jiangyigithub.github.io/vlarich.github.io/posts/grpo/">
     
 
     
     
-    <meta property="og:url" content="http://localhost:1313/vlarich.github.io/posts/grpo/">
+    <meta property="og:url" content="https://jiangyigithub.github.io/vlarich.github.io/posts/grpo/">
   <meta property="og:site_name" content="VLA RICH Hugo Site">
   <meta property="og:title" content="VLA RICH Hugo Site">
   <meta property="og:description" content="import torch class GRPO: def __init__(self,eps,clip,beta): self.eps =eps self.clip = clip self.beta = beta def mask_mean(self,loss,mask,dim=-1): return (loss*mask).sum(dim=dim)/mask.sum(dim=dim) # 点乘 和 tensor 按维度求和 def group_advantages(self,rewards): mean=torch.mean(rewards) std = torch.std(rewards,unbiased=False)# unbiased=False， 真实这组数的尺度，而不是总体估计 advantages = (rewards-mean)/(std&#43;self.eps) return advantages.detach()# 梯度截断 def grpo_loss(self,old_logps, new_logps,ref_logps,advantages): ref_logr = new_logps - ref_logps # logr kl_score = (torch.exp(ref_logr)-ref_logr-1)*self.beta # KL penalty: e^logr-logr-1 ratio = torch.exp(new_logps - old_logps) # r exp 的作用: 把“对数概率差”还原成“概率的比例” surr1 = ratio*advantages # r*A surr2 = torch.clamp(ratio,1-self.clip,1&#43;self.clip)*advantages # clip(r)*A loss = - torch.mean(torch.min(surr1,surr2)-kl_score) # 最大化, return loss # loss">
@@ -79,8 +79,11 @@ class GRPO:
   <meta name="twitter:title" content="VLA RICH Hugo Site">
   <meta name="twitter:description" content="import torch class GRPO: def __init__(self,eps,clip,beta): self.eps =eps self.clip = clip self.beta = beta def mask_mean(self,loss,mask,dim=-1): return (loss*mask).sum(dim=dim)/mask.sum(dim=dim) # 点乘 和 tensor 按维度求和 def group_advantages(self,rewards): mean=torch.mean(rewards) std = torch.std(rewards,unbiased=False)# unbiased=False， 真实这组数的尺度，而不是总体估计 advantages = (rewards-mean)/(std&#43;self.eps) return advantages.detach()# 梯度截断 def grpo_loss(self,old_logps, new_logps,ref_logps,advantages): ref_logr = new_logps - ref_logps # logr kl_score = (torch.exp(ref_logr)-ref_logr-1)*self.beta # KL penalty: e^logr-logr-1 ratio = torch.exp(new_logps - old_logps) # r exp 的作用: 把“对数概率差”还原成“概率的比例” surr1 = ratio*advantages # r*A surr2 = torch.clamp(ratio,1-self.clip,1&#43;self.clip)*advantages # clip(r)*A loss = - torch.mean(torch.min(surr1,surr2)-kl_score) # 最大化, return loss # loss">
 
+      
+      
+    
 	
-  </head><body class="ma0 avenir bg-near-white development is-page is-page page-grpo">
+  </head><body class="ma0 avenir bg-near-white production is-page is-page page-grpo">
     
    
   
@@ -164,7 +167,7 @@ class GRPO:
     </main>
     <footer class="bg-black bottom-0 w-100 pa3" role="contentinfo">
   <div class="flex justify-between">
-  <a class="f4 fw4 hover-white white-70 dn dib-ns pv2 ph3 no-underline" href="http://localhost:1313/vlarich.github.io/" >
+  <a class="f4 fw4 hover-white white-70 dn dib-ns pv2 ph3 no-underline" href="https://jiangyigithub.github.io/vlarich.github.io/" >
     &copy;  VLA RICH Hugo Site 2026 
   </a>
     <div><div class="ananke-socials"></div>

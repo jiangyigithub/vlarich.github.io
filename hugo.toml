@@ -2,9 +2,72 @@ baseURL = 'https://jiangyigithub.github.io/vlarich.github.io/'
 languageCode = 'en-us'
 title = 'VLA RICH Hugo Site'
 theme = 'ananke'
+
+# Sitemap configuration
+[sitemap]
+  changefreq = "monthly"
+  priority = 0.5
+  filename = "sitemap.xml"
+
+# Main configuration parameters for Ananke theme
+[params]
+  # Basic site information
+  description = "The last theme you'll ever need. Maybe."
+  author = "Your Name"
+  favicon = ""
+  site_logo = ""
+  
+  # Hero section - add your featured image path here
+  featured_image = "/images/gohugo-default-sample-hero-image.jpg"
+  
+  # Background color - choose from Tachyons CSS color classes
+  # Options: "bg-black", "bg-white", "bg-blue", "bg-gray", "bg-near-white", etc.
+  background_color_class = "bg-black"
+  
+  # Body classes for typography and styling
+  # Options: "avenir bg-near-white", "helvetica bg-white", etc.
+  body_classes = "avenir bg-near-white"
+  
+  # Number of recent posts to display on homepage
+  recent_posts_number = 3
+  
+  # Display reading time on articles
+  show_reading_time = true
+  
+  # Text color - optional
+  text_color = ""
+  
+  # Custom CSS files (place files in assets/ananke/css/)
+  custom_css = ["custom.css"]
+
+# Social media links - use the array format for better control
+[[params.ananke_socials]]
+  name = "github"
+  url = "https://github.com/jiangyigithub"
+
+[[params.ananke_socials]]
+  name = "twitter"
+  url = "https://twitter.com/yourusername"
+
+# Optional: Add more social links as needed
+# [[params.ananke_socials]]
+#   name = "linkedin"
+#   url = "https://linkedin.com/in/yourusername"
+#
+# [[params.ananke_socials]]
+#   name = "instagram"
+#   url = "https://instagram.com/yourusername"
+
+# Google Analytics (optional)
+# googleAnalytics = "UA-123456789-0"
+
+# Robots.txt generation
+enableRobotsTXT = true
+
+# Pagination settings
+Paginate = 10
+
+# Cache configuration
 [caches]
   [caches.images]
     dir = ':cacheDir/images'
-
- 
- 
