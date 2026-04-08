@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en-us">
-  <head><script src="/vlarich.github.io/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=vlarich.github.io/livereload" data-no-instant defer></script>
+  <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     
@@ -49,13 +49,13 @@ class PPO:
     
     
     
-      <meta name="robots" content="noindex, nofollow">
+      <meta name="robots" content="index, follow">
     
     <meta name="author" content="Your Name">
     
 
     
-<link rel="stylesheet" href="/vlarich.github.io/ananke/css/main.min.css" >
+<link rel="stylesheet" href="/vlarich.github.io/ananke/css/main.min.efe4d852f731d5d1fbb87718387202a97aafd768cdcdaed0662bbe6982e91824.css" >
 
 
 
@@ -75,12 +75,12 @@ class PPO:
     
 
     
-      <link rel="canonical" href="http://localhost:1313/vlarich.github.io/posts/ppo/">
+      <link rel="canonical" href="https://jiangyigithub.github.io/vlarich.github.io/posts/ppo/">
     
 
     
     
-    <meta property="og:url" content="http://localhost:1313/vlarich.github.io/posts/ppo/">
+    <meta property="og:url" content="https://jiangyigithub.github.io/vlarich.github.io/posts/ppo/">
   <meta property="og:site_name" content="VLA RICH Hugo Site">
   <meta property="og:title" content="VLA RICH Hugo Site">
   <meta property="og:description" content="import torch from torch import nn from torch.nn import functional as F class PPO: def __init__(self,clip,gamma=0.99,lam=0.95): self.clip = clip self.gamma = gamma self.lam = lam def mask_mean(self,loss,mask,dim=-1): return (loss*mask).sum(dim=dim)/mask.sum(dim=dim) def advantage_estimate(self,rewards,values): seq_len = values.shape[1] # [batch_size, seq_len] advantages = torch.zeros_like(rewards) gae=0 for i in range(seq_len-1,-1,-1): next_value = values[:,i&#43;1] if i&lt;seq_len-1 else 0.0 # rewards[:,i] 对应 r_t # next_value 对应 V(s_{t&#43;1}) # values[:,i] 对应 V(s_t) delta = rewards[:,i]&#43;self.gamma*next_value-values[:,i] # TD error = r_t &#43; V(s_{t&#43;1}) - V(s_t) gae = delta&#43;self.lam*self.gamma*gae # A_t​=δt​&#43;γλ*A_t&#43;1​ advantages[:,i]=gae # 给 batch 中所有 sequence 的第 i 个 token 赋 advantage returns =advantages&#43;values # Target Value Q(s,a)=A(s,a)&#43;V(s) return advantages,returns def policy_loss(self,new_probs,old_probs,advantages,act_mask): ratio = torch.exp(new_probs-old_probs) surr1=ratio*advantages surr2=torch.clamp(ratio,1-self.clip,1&#43;self.clip)*advantages loss=-torch.min(surr1,surr2) return self.mask_mean(loss,act_mask) # act_mask 是 action mask（动作mask） def value_loss(self,new_values,returns,act_mask): loss = (new_values-returns)**2 # 更新预期 return self.mask_mean(loss,act_mask)">
@@ -95,8 +95,11 @@ class PPO:
   <meta name="twitter:title" content="VLA RICH Hugo Site">
   <meta name="twitter:description" content="import torch from torch import nn from torch.nn import functional as F class PPO: def __init__(self,clip,gamma=0.99,lam=0.95): self.clip = clip self.gamma = gamma self.lam = lam def mask_mean(self,loss,mask,dim=-1): return (loss*mask).sum(dim=dim)/mask.sum(dim=dim) def advantage_estimate(self,rewards,values): seq_len = values.shape[1] # [batch_size, seq_len] advantages = torch.zeros_like(rewards) gae=0 for i in range(seq_len-1,-1,-1): next_value = values[:,i&#43;1] if i&lt;seq_len-1 else 0.0 # rewards[:,i] 对应 r_t # next_value 对应 V(s_{t&#43;1}) # values[:,i] 对应 V(s_t) delta = rewards[:,i]&#43;self.gamma*next_value-values[:,i] # TD error = r_t &#43; V(s_{t&#43;1}) - V(s_t) gae = delta&#43;self.lam*self.gamma*gae # A_t​=δt​&#43;γλ*A_t&#43;1​ advantages[:,i]=gae # 给 batch 中所有 sequence 的第 i 个 token 赋 advantage returns =advantages&#43;values # Target Value Q(s,a)=A(s,a)&#43;V(s) return advantages,returns def policy_loss(self,new_probs,old_probs,advantages,act_mask): ratio = torch.exp(new_probs-old_probs) surr1=ratio*advantages surr2=torch.clamp(ratio,1-self.clip,1&#43;self.clip)*advantages loss=-torch.min(surr1,surr2) return self.mask_mean(loss,act_mask) # act_mask 是 action mask（动作mask） def value_loss(self,new_values,returns,act_mask): loss = (new_values-returns)**2 # 更新预期 return self.mask_mean(loss,act_mask)">
 
+      
+      
+    
 	
-  </head><body class="ma0 avenir bg-near-white development is-page is-page page-ppo">
+  </head><body class="ma0 avenir bg-near-white production is-page is-page page-ppo">
     
    
   
@@ -199,7 +202,7 @@ class PPO:
     </main>
     <footer class="bg-black bottom-0 w-100 pa3" role="contentinfo">
   <div class="flex justify-between">
-  <a class="f4 fw4 hover-white white-70 dn dib-ns pv2 ph3 no-underline" href="http://localhost:1313/vlarich.github.io/" >
+  <a class="f4 fw4 hover-white white-70 dn dib-ns pv2 ph3 no-underline" href="https://jiangyigithub.github.io/vlarich.github.io/" >
     &copy;  VLA RICH Hugo Site 2026 
   </a>
     <div><div class="ananke-socials"></div>

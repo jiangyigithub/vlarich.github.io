@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en-us">
-  <head><script src="/vlarich.github.io/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=vlarich.github.io/livereload" data-no-instant defer></script>
+  <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     
@@ -62,13 +62,13 @@ net(x,attn_mask).shape
     
     
     
-      <meta name="robots" content="noindex, nofollow">
+      <meta name="robots" content="index, follow">
     
     <meta name="author" content="Your Name">
     
 
     
-<link rel="stylesheet" href="/vlarich.github.io/ananke/css/main.min.css" >
+<link rel="stylesheet" href="/vlarich.github.io/ananke/css/main.min.efe4d852f731d5d1fbb87718387202a97aafd768cdcdaed0662bbe6982e91824.css" >
 
 
 
@@ -88,12 +88,12 @@ net(x,attn_mask).shape
     
 
     
-      <link rel="canonical" href="http://localhost:1313/vlarich.github.io/posts/mha/">
+      <link rel="canonical" href="https://jiangyigithub.github.io/vlarich.github.io/posts/mha/">
     
 
     
     
-    <meta property="og:url" content="http://localhost:1313/vlarich.github.io/posts/mha/">
+    <meta property="og:url" content="https://jiangyigithub.github.io/vlarich.github.io/posts/mha/">
   <meta property="og:site_name" content="VLA RICH Hugo Site">
   <meta property="og:title" content="VLA RICH Hugo Site">
   <meta property="og:description" content="MultiHeadSelfAttention import torch import torch.nn as nn import math class MultiHeadSelfAttention(nn.Module): def __init__(self,nums_head=8,hidden_dim=512): super().__init__() self.hidden_dim = hidden_dim self.nums_head = nums_head self.head_dim = hidden_dim//nums_head self.q_proj = nn.Linear(hidden_dim,hidden_dim) self.k_proj = nn.Linear(hidden_dim,hidden_dim) self.v_proj = nn.Linear(hidden_dim,hidden_dim) self.o_proj = nn.Linear(hidden_dim,hidden_dim) self.dropout=nn.Dropout(0.1) def forward(self,x,attn_mask=None): batch_size,seq_len,self.hidden_dim = x.size() q=self.q_proj(x) k=self.k_proj(x) v=self.v_proj(x) # split q_state = q.view(batch_size,seq_len,self.nums_head,self.head_dim).transpose(1,2) k_state = k.view(batch_size,seq_len,self.nums_head,self.head_dim).transpose(1,2) v_state = v.view(batch_size,seq_len,self.nums_head,self.head_dim).transpose(1,2) # q@k^t/sqrt(d) attn_score = q_state@k_state.transpose(-1,-2)/math.sqrt(self.head_dim) if attn_mask is not None: attn_score = attn_score.masked_fill(attn_mask ==0,-1e9) attn_weight = torch.softmax(attn_score,dim=-1) attn_weight = self.dropout(attn_weight) output_mid = attn_weight@v_state # concat output_mid = output_mid.transpose(-1,-2).contiguous() output_mid = output_mid.view(batch_size,seq_len,-1) output= self.o_proj(output_mid) return output x= torch.rand(3,2,512) attn_mask = torch.tensor([ [0,1], [0,0], [1,0], ]).unsqueeze(1).unsqueeze(2).expand(3,8,2,2) net = MultiHeadSelfAttention(8,512) net(x,attn_mask).shape">
@@ -108,8 +108,11 @@ net(x,attn_mask).shape
   <meta name="twitter:title" content="VLA RICH Hugo Site">
   <meta name="twitter:description" content="MultiHeadSelfAttention import torch import torch.nn as nn import math class MultiHeadSelfAttention(nn.Module): def __init__(self,nums_head=8,hidden_dim=512): super().__init__() self.hidden_dim = hidden_dim self.nums_head = nums_head self.head_dim = hidden_dim//nums_head self.q_proj = nn.Linear(hidden_dim,hidden_dim) self.k_proj = nn.Linear(hidden_dim,hidden_dim) self.v_proj = nn.Linear(hidden_dim,hidden_dim) self.o_proj = nn.Linear(hidden_dim,hidden_dim) self.dropout=nn.Dropout(0.1) def forward(self,x,attn_mask=None): batch_size,seq_len,self.hidden_dim = x.size() q=self.q_proj(x) k=self.k_proj(x) v=self.v_proj(x) # split q_state = q.view(batch_size,seq_len,self.nums_head,self.head_dim).transpose(1,2) k_state = k.view(batch_size,seq_len,self.nums_head,self.head_dim).transpose(1,2) v_state = v.view(batch_size,seq_len,self.nums_head,self.head_dim).transpose(1,2) # q@k^t/sqrt(d) attn_score = q_state@k_state.transpose(-1,-2)/math.sqrt(self.head_dim) if attn_mask is not None: attn_score = attn_score.masked_fill(attn_mask ==0,-1e9) attn_weight = torch.softmax(attn_score,dim=-1) attn_weight = self.dropout(attn_weight) output_mid = attn_weight@v_state # concat output_mid = output_mid.transpose(-1,-2).contiguous() output_mid = output_mid.view(batch_size,seq_len,-1) output= self.o_proj(output_mid) return output x= torch.rand(3,2,512) attn_mask = torch.tensor([ [0,1], [0,0], [1,0], ]).unsqueeze(1).unsqueeze(2).expand(3,8,2,2) net = MultiHeadSelfAttention(8,512) net(x,attn_mask).shape">
 
+      
+      
+    
 	
-  </head><body class="ma0 avenir bg-near-white development is-page is-page page-MHA">
+  </head><body class="ma0 avenir bg-near-white production is-page is-page page-MHA">
     
    
   
@@ -225,7 +228,7 @@ net(x,attn_mask).shape
     </main>
     <footer class="bg-black bottom-0 w-100 pa3" role="contentinfo">
   <div class="flex justify-between">
-  <a class="f4 fw4 hover-white white-70 dn dib-ns pv2 ph3 no-underline" href="http://localhost:1313/vlarich.github.io/" >
+  <a class="f4 fw4 hover-white white-70 dn dib-ns pv2 ph3 no-underline" href="https://jiangyigithub.github.io/vlarich.github.io/" >
     &copy;  VLA RICH Hugo Site 2026 
   </a>
     <div><div class="ananke-socials"></div>
