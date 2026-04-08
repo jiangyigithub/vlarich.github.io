@@ -1,158 +1,240 @@
 <!DOCTYPE html>
-<html lang="en-us" dir="ltr">
-    <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="https://yuanchaofa.com/post/hands-on-rope-position-embedding\rclass MultiHeadAttentionWithRoPE(torch.nn.Module): &#34;&#34;&#34; 带 RoPE 的多头注意力 &#34;&#34;&#34; def __init__(self, d_model: int, num_heads: int, max_seq_len: int = 4096): super().__init__() assert d_model % num_heads == 0 self.d_model = d_model self.num_heads = num_heads self.head_dim = d_model // num_heads self.q_proj = torch.nn.Linear(d_model, d_model, bias=False) self.k_proj = torch.nn.Linear(d_model, d_model, bias=False) self.v_proj = torch.nn.Linear(d_model, d_model, bias=False) self.o_proj = torch.nn.Linear(d_model, d_model, bias=False) # RoPE self.rope = RotaryPositionEmbedding(self.head_dim, max_seq_len) def forward(self, x: torch.Tensor, mask: torch.Tensor = None): &#34;&#34;&#34; Args: x: 输入，shape (batch, seq_len, d_model) mask: 注意力掩码，shape (seq_len, seq_len) &#34;&#34;&#34; batch, seq_len, _ = x.shape # 线性投影 q = self.q_proj(x) k = self.k_proj(x) v = self.v_proj(x) # 重塑为多头形式 q = q.view(batch, seq_len, self.num_heads, self.head_dim) k = k.view(batch, seq_len, self.num_heads, self.head_dim) v = v.view(batch, seq_len, self.num_heads, self.head_dim) # 应用 RoPE（只对 Q 和 K） q, k = self.rope(q, k) #rope # 转置用于矩阵乘法：(batch, num_heads, seq_len, head_dim) q = q.transpose(1, 2) k = k.transpose(1, 2) v = v.transpose(1, 2) # 计算注意力分数 scale = self.head_dim ** -0.5 attn_scores = torch.matmul(q, k.transpose(-2, -1)) * scale if mask is not None: attn_scores = attn_scores.masked_fill(mask == 0, float(&#39;-inf&#39;)) attn_probs = torch.softmax(attn_scores, dim=-1) # 加权求和 attn_output = torch.matmul(attn_probs, v) # 重塑并输出投影 attn_output = attn_output.transpose(1, 2).contiguous() attn_output = attn_output.view(batch, seq_len, self.d_model) output = self.o_proj(attn_output) return output # 测试 mha = MultiHeadAttentionWithRoPE(d_model=512, num_heads=8) x = torch.randn(2, 128, 512) output = mha(x) print(f&#34;Input shape: {x.shape}&#34;) print(f&#34;Output shape: {output.shape}&#34;) class RotaryPositionEmbedding(torch.nn.Module): &#34;&#34;&#34; 完整的 RoPE 实现 &#34;&#34;&#34; def __init__(self, dim: int, max_seq_len: int = 4096, theta: float = 10000.0): &#34;&#34;&#34; Args: dim: 每个注意力头的维度 max_seq_len: 最大序列长度 theta: 基础频率参数 &#34;&#34;&#34; super().__init__() self.dim = dim self.max_seq_len = max_seq_len self.theta = theta # 预计算并缓存 sin/cos 值 cos, sin = get_rotary_embedding(dim, max_seq_len, theta) self.register_buffer(&#39;cos_cached&#39;, cos) self.register_buffer(&#39;sin_cached&#39;, sin) def forward(self, q: torch.Tensor, k: torch.Tensor, positions: torch.Tensor = None): &#34;&#34;&#34; 对 Query 和 Key 应用 RoPE Args: q: Query，shape (batch, seq_len, num_heads, head_dim) k: Key，shape (batch, seq_len, num_heads, head_dim) positions: 位置索引，默认为 [0, 1, 2, ..., seq_len-1] Returns: q_rot, k_rot: 旋转后的 Query 和 Key &#34;&#34;&#34; seq_len = q.shape[1] # 获取当前序列长度的 cos/sin cos = self.cos_cached[:seq_len] sin = self.sin_cached[:seq_len] # 应用旋转 q_rot, k_rot = apply_rotary_pos_emb(q, k, cos, sin) return q_rot, k_rot # 测试 rope = RotaryPositionEmbedding(dim=64, max_seq_len=4096) # 模拟输入 batch_size = 2 seq_len = 128 num_heads = 8 head_dim = 64 q = torch.randn(batch_size, seq_len, num_heads, head_dim) k = torch.randn(batch_size, seq_len, num_heads, head_dim) q_rot, k_rot = rope(q, k) print(f&#34;Q_rot shape: {q_rot.shape}&#34;) print(f&#34;K_rot shape: {k_rot.shape}&#34;) ">
-<title>My New Hugo Site</title>
+<html lang="en-us">
+  <head><script src="/vlarich.github.io/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=vlarich.github.io/livereload" data-no-instant defer></script>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    
+    <title>VLA RICH Hugo Site</title>
+    <meta name="viewport" content="width=device-width,minimum-scale=1">
+    <meta name="description" content="https://yuanchaofa.com/post/hands-on-rope-position-embedding
+class MultiHeadAttentionWithRoPE(torch.nn.Module):
+    &#34;&#34;&#34;
+    带 RoPE 的多头注意力
+    &#34;&#34;&#34;
+    def __init__(self, d_model: int, num_heads: int, max_seq_len: int = 4096):
+        super().__init__()
+        assert d_model % num_heads == 0
+
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.head_dim = d_model // num_heads
+
+        self.q_proj = torch.nn.Linear(d_model, d_model, bias=False)
+        self.k_proj = torch.nn.Linear(d_model, d_model, bias=False)
+        self.v_proj = torch.nn.Linear(d_model, d_model, bias=False)
+        self.o_proj = torch.nn.Linear(d_model, d_model, bias=False)
+
+        # RoPE
+        self.rope = RotaryPositionEmbedding(self.head_dim, max_seq_len)
+
+    def forward(self, x: torch.Tensor, mask: torch.Tensor = None):
+        &#34;&#34;&#34;
+        Args:
+            x: 输入，shape (batch, seq_len, d_model)
+            mask: 注意力掩码，shape (seq_len, seq_len)
+        &#34;&#34;&#34;
+        batch, seq_len, _ = x.shape
+
+        # 线性投影
+        q = self.q_proj(x)
+        k = self.k_proj(x)
+        v = self.v_proj(x)
+
+        # 重塑为多头形式
+        q = q.view(batch, seq_len, self.num_heads, self.head_dim)
+        k = k.view(batch, seq_len, self.num_heads, self.head_dim)
+        v = v.view(batch, seq_len, self.num_heads, self.head_dim)
+
+        # 应用 RoPE（只对 Q 和 K）
+        q, k = self.rope(q, k) #rope
+
+        # 转置用于矩阵乘法：(batch, num_heads, seq_len, head_dim)
+        q = q.transpose(1, 2)
+        k = k.transpose(1, 2)
+        v = v.transpose(1, 2)
+
+        # 计算注意力分数
+        scale = self.head_dim ** -0.5
+        attn_scores = torch.matmul(q, k.transpose(-2, -1)) * scale
+
+        if mask is not None:
+            attn_scores = attn_scores.masked_fill(mask == 0, float(&#39;-inf&#39;))
+
+        attn_probs = torch.softmax(attn_scores, dim=-1)
+
+        # 加权求和
+        attn_output = torch.matmul(attn_probs, v)
+
+        # 重塑并输出投影
+        attn_output = attn_output.transpose(1, 2).contiguous()
+        attn_output = attn_output.view(batch, seq_len, self.d_model)
+        output = self.o_proj(attn_output)
+
+        return output
 
 
-<link rel="canonical" href="https://example.org/posts/rope/">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap">
+# 测试
+mha = MultiHeadAttentionWithRoPE(d_model=512, num_heads=8)
+x = torch.randn(2, 128, 512)
+output = mha(x)
+print(f&#34;Input shape: {x.shape}&#34;)
+print(f&#34;Output shape: {output.shape}&#34;)
+class RotaryPositionEmbedding(torch.nn.Module):
+    &#34;&#34;&#34;
+    完整的 RoPE 实现
+    &#34;&#34;&#34;
+    def __init__(self, dim: int, max_seq_len: int = 4096, theta: float = 10000.0):
+        &#34;&#34;&#34;
+        Args:
+            dim: 每个注意力头的维度
+            max_seq_len: 最大序列长度
+            theta: 基础频率参数
+        &#34;&#34;&#34;
+        super().__init__()
+        self.dim = dim
+        self.max_seq_len = max_seq_len
+        self.theta = theta
+
+        # 预计算并缓存 sin/cos 值
+        cos, sin = get_rotary_embedding(dim, max_seq_len, theta)
+        self.register_buffer(&#39;cos_cached&#39;, cos)
+        self.register_buffer(&#39;sin_cached&#39;, sin)
+
+    def forward(self, q: torch.Tensor, k: torch.Tensor, positions: torch.Tensor = None):
+        &#34;&#34;&#34;
+        对 Query 和 Key 应用 RoPE
+
+        Args:
+            q: Query，shape (batch, seq_len, num_heads, head_dim)
+            k: Key，shape (batch, seq_len, num_heads, head_dim)
+            positions: 位置索引，默认为 [0, 1, 2, ..., seq_len-1]
+
+        Returns:
+            q_rot, k_rot: 旋转后的 Query 和 Key
+        &#34;&#34;&#34;
+        seq_len = q.shape[1]
+
+        # 获取当前序列长度的 cos/sin
+        cos = self.cos_cached[:seq_len]
+        sin = self.sin_cached[:seq_len]
+
+        # 应用旋转
+        q_rot, k_rot = apply_rotary_pos_emb(q, k, cos, sin)
+
+        return q_rot, k_rot
 
 
-<link rel="stylesheet" href="/scss/style.min.389e156f5e9bb13df5a924cfa99dfb9c39f3e01e68d9e146cd65bdae963be145.css"><meta property='og:title' content="My New Hugo Site">
-<meta property='og:description' content="https://yuanchaofa.com/post/hands-on-rope-position-embedding\rclass MultiHeadAttentionWithRoPE(torch.nn.Module): &#34;&#34;&#34; 带 RoPE 的多头注意力 &#34;&#34;&#34; def __init__(self, d_model: int, num_heads: int, max_seq_len: int = 4096): super().__init__() assert d_model % num_heads == 0 self.d_model = d_model self.num_heads = num_heads self.head_dim = d_model // num_heads self.q_proj = torch.nn.Linear(d_model, d_model, bias=False) self.k_proj = torch.nn.Linear(d_model, d_model, bias=False) self.v_proj = torch.nn.Linear(d_model, d_model, bias=False) self.o_proj = torch.nn.Linear(d_model, d_model, bias=False) # RoPE self.rope = RotaryPositionEmbedding(self.head_dim, max_seq_len) def forward(self, x: torch.Tensor, mask: torch.Tensor = None): &#34;&#34;&#34; Args: x: 输入，shape (batch, seq_len, d_model) mask: 注意力掩码，shape (seq_len, seq_len) &#34;&#34;&#34; batch, seq_len, _ = x.shape # 线性投影 q = self.q_proj(x) k = self.k_proj(x) v = self.v_proj(x) # 重塑为多头形式 q = q.view(batch, seq_len, self.num_heads, self.head_dim) k = k.view(batch, seq_len, self.num_heads, self.head_dim) v = v.view(batch, seq_len, self.num_heads, self.head_dim) # 应用 RoPE（只对 Q 和 K） q, k = self.rope(q, k) #rope # 转置用于矩阵乘法：(batch, num_heads, seq_len, head_dim) q = q.transpose(1, 2) k = k.transpose(1, 2) v = v.transpose(1, 2) # 计算注意力分数 scale = self.head_dim ** -0.5 attn_scores = torch.matmul(q, k.transpose(-2, -1)) * scale if mask is not None: attn_scores = attn_scores.masked_fill(mask == 0, float(&#39;-inf&#39;)) attn_probs = torch.softmax(attn_scores, dim=-1) # 加权求和 attn_output = torch.matmul(attn_probs, v) # 重塑并输出投影 attn_output = attn_output.transpose(1, 2).contiguous() attn_output = attn_output.view(batch, seq_len, self.d_model) output = self.o_proj(attn_output) return output # 测试 mha = MultiHeadAttentionWithRoPE(d_model=512, num_heads=8) x = torch.randn(2, 128, 512) output = mha(x) print(f&#34;Input shape: {x.shape}&#34;) print(f&#34;Output shape: {output.shape}&#34;) class RotaryPositionEmbedding(torch.nn.Module): &#34;&#34;&#34; 完整的 RoPE 实现 &#34;&#34;&#34; def __init__(self, dim: int, max_seq_len: int = 4096, theta: float = 10000.0): &#34;&#34;&#34; Args: dim: 每个注意力头的维度 max_seq_len: 最大序列长度 theta: 基础频率参数 &#34;&#34;&#34; super().__init__() self.dim = dim self.max_seq_len = max_seq_len self.theta = theta # 预计算并缓存 sin/cos 值 cos, sin = get_rotary_embedding(dim, max_seq_len, theta) self.register_buffer(&#39;cos_cached&#39;, cos) self.register_buffer(&#39;sin_cached&#39;, sin) def forward(self, q: torch.Tensor, k: torch.Tensor, positions: torch.Tensor = None): &#34;&#34;&#34; 对 Query 和 Key 应用 RoPE Args: q: Query，shape (batch, seq_len, num_heads, head_dim) k: Key，shape (batch, seq_len, num_heads, head_dim) positions: 位置索引，默认为 [0, 1, 2, ..., seq_len-1] Returns: q_rot, k_rot: 旋转后的 Query 和 Key &#34;&#34;&#34; seq_len = q.shape[1] # 获取当前序列长度的 cos/sin cos = self.cos_cached[:seq_len] sin = self.sin_cached[:seq_len] # 应用旋转 q_rot, k_rot = apply_rotary_pos_emb(q, k, cos, sin) return q_rot, k_rot # 测试 rope = RotaryPositionEmbedding(dim=64, max_seq_len=4096) # 模拟输入 batch_size = 2 seq_len = 128 num_heads = 8 head_dim = 64 q = torch.randn(batch_size, seq_len, num_heads, head_dim) k = torch.randn(batch_size, seq_len, num_heads, head_dim) q_rot, k_rot = rope(q, k) print(f&#34;Q_rot shape: {q_rot.shape}&#34;) print(f&#34;K_rot shape: {k_rot.shape}&#34;) ">
-<meta property='og:url' content='https://example.org/posts/rope/'>
-<meta property='og:site_name' content='My New Hugo Site'>
-<meta property='og:type' content='article'><meta property='article:section' content='Posts' />
-<meta name="twitter:title" content="My New Hugo Site">
-<meta name="twitter:description" content="https://yuanchaofa.com/post/hands-on-rope-position-embedding\rclass MultiHeadAttentionWithRoPE(torch.nn.Module): &#34;&#34;&#34; 带 RoPE 的多头注意力 &#34;&#34;&#34; def __init__(self, d_model: int, num_heads: int, max_seq_len: int = 4096): super().__init__() assert d_model % num_heads == 0 self.d_model = d_model self.num_heads = num_heads self.head_dim = d_model // num_heads self.q_proj = torch.nn.Linear(d_model, d_model, bias=False) self.k_proj = torch.nn.Linear(d_model, d_model, bias=False) self.v_proj = torch.nn.Linear(d_model, d_model, bias=False) self.o_proj = torch.nn.Linear(d_model, d_model, bias=False) # RoPE self.rope = RotaryPositionEmbedding(self.head_dim, max_seq_len) def forward(self, x: torch.Tensor, mask: torch.Tensor = None): &#34;&#34;&#34; Args: x: 输入，shape (batch, seq_len, d_model) mask: 注意力掩码，shape (seq_len, seq_len) &#34;&#34;&#34; batch, seq_len, _ = x.shape # 线性投影 q = self.q_proj(x) k = self.k_proj(x) v = self.v_proj(x) # 重塑为多头形式 q = q.view(batch, seq_len, self.num_heads, self.head_dim) k = k.view(batch, seq_len, self.num_heads, self.head_dim) v = v.view(batch, seq_len, self.num_heads, self.head_dim) # 应用 RoPE（只对 Q 和 K） q, k = self.rope(q, k) #rope # 转置用于矩阵乘法：(batch, num_heads, seq_len, head_dim) q = q.transpose(1, 2) k = k.transpose(1, 2) v = v.transpose(1, 2) # 计算注意力分数 scale = self.head_dim ** -0.5 attn_scores = torch.matmul(q, k.transpose(-2, -1)) * scale if mask is not None: attn_scores = attn_scores.masked_fill(mask == 0, float(&#39;-inf&#39;)) attn_probs = torch.softmax(attn_scores, dim=-1) # 加权求和 attn_output = torch.matmul(attn_probs, v) # 重塑并输出投影 attn_output = attn_output.transpose(1, 2).contiguous() attn_output = attn_output.view(batch, seq_len, self.d_model) output = self.o_proj(attn_output) return output # 测试 mha = MultiHeadAttentionWithRoPE(d_model=512, num_heads=8) x = torch.randn(2, 128, 512) output = mha(x) print(f&#34;Input shape: {x.shape}&#34;) print(f&#34;Output shape: {output.shape}&#34;) class RotaryPositionEmbedding(torch.nn.Module): &#34;&#34;&#34; 完整的 RoPE 实现 &#34;&#34;&#34; def __init__(self, dim: int, max_seq_len: int = 4096, theta: float = 10000.0): &#34;&#34;&#34; Args: dim: 每个注意力头的维度 max_seq_len: 最大序列长度 theta: 基础频率参数 &#34;&#34;&#34; super().__init__() self.dim = dim self.max_seq_len = max_seq_len self.theta = theta # 预计算并缓存 sin/cos 值 cos, sin = get_rotary_embedding(dim, max_seq_len, theta) self.register_buffer(&#39;cos_cached&#39;, cos) self.register_buffer(&#39;sin_cached&#39;, sin) def forward(self, q: torch.Tensor, k: torch.Tensor, positions: torch.Tensor = None): &#34;&#34;&#34; 对 Query 和 Key 应用 RoPE Args: q: Query，shape (batch, seq_len, num_heads, head_dim) k: Key，shape (batch, seq_len, num_heads, head_dim) positions: 位置索引，默认为 [0, 1, 2, ..., seq_len-1] Returns: q_rot, k_rot: 旋转后的 Query 和 Key &#34;&#34;&#34; seq_len = q.shape[1] # 获取当前序列长度的 cos/sin cos = self.cos_cached[:seq_len] sin = self.sin_cached[:seq_len] # 应用旋转 q_rot, k_rot = apply_rotary_pos_emb(q, k, cos, sin) return q_rot, k_rot # 测试 rope = RotaryPositionEmbedding(dim=64, max_seq_len=4096) # 模拟输入 batch_size = 2 seq_len = 128 num_heads = 8 head_dim = 64 q = torch.randn(batch_size, seq_len, num_heads, head_dim) k = torch.randn(batch_size, seq_len, num_heads, head_dim) q_rot, k_rot = rope(q, k) print(f&#34;Q_rot shape: {q_rot.shape}&#34;) print(f&#34;K_rot shape: {k_rot.shape}&#34;) ">
-    </head>
-    <body class="
-    article-page
-    ">
-    <script>
-        (function() {
-            const colorSchemeKey = 'StackColorScheme';
-            if(!localStorage.getItem(colorSchemeKey)){
-                localStorage.setItem(colorSchemeKey, "auto");
-            }
-        })();
-    </script><script>
-    (function() {
-        const colorSchemeKey = 'StackColorScheme';
-        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
-        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+# 测试
+rope = RotaryPositionEmbedding(dim=64, max_seq_len=4096)
 
-        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
-            
+# 模拟输入
+batch_size = 2
+seq_len = 128
+num_heads = 8
+head_dim = 64
 
-            document.documentElement.dataset.scheme = 'dark';
-        } else {
-            document.documentElement.dataset.scheme = 'light';
-        }
-    })();
-</script>
-<div class="container main-container flex on-phone--column compact"><aside class="sidebar left-sidebar sticky ">
-    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="Toggle Menu">
-        <span class="hamburger-box">
-            <span class="hamburger-inner"></span>
-        </span>
-    </button>
+q = torch.randn(batch_size, seq_len, num_heads, head_dim)
+k = torch.randn(batch_size, seq_len, num_heads, head_dim)
 
-    <header>
-        
-        
-        <div class="site-meta">
-            <h1 class="site-name"><a href="/">My New Hugo Site</a></h1>
-            <h2 class="site-description"></h2>
-        </div>
-    </header><ol class="menu" id="main-menu">
-        
-        
-        <li class="menu-bottom-section">
-            <ol class="menu">
+q_rot, k_rot = rope(q, k)
+print(f&#34;Q_rot shape: {q_rot.shape}&#34;)
+print(f&#34;K_rot shape: {k_rot.shape}&#34;)
+">
+    <meta name="generator" content="Hugo 0.157.0">
+    
+    
+    
+      <meta name="robots" content="noindex, nofollow">
+    
+    
 
-                
-                    <li id="dark-mode-toggle">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-  <path stroke="none" d="M0 0h24v24H0z"/>
-  <circle cx="8" cy="12" r="2" />
-  <rect x="2" y="6" width="20" height="12" rx="6" />
-</svg>
+    
+<link rel="stylesheet" href="/vlarich.github.io/ananke/css/main.min.css" >
 
 
 
-                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-  <path stroke="none" d="M0 0h24v24H0z"/>
-  <circle cx="16" cy="12" r="2" />
-  <rect x="2" y="6" width="20" height="12" rx="6" />
-</svg>
-
-
-
-                        <span>Dark Mode</span>
-                    </li>
-                
-            </ol>
-        </li>
-    </ol>
-</aside>
 
     
 
-            <main class="main full-width">
-    <article class="main-article">
-    <header class="article-header">
 
-    <div class="article-details">
+    
+      
+
     
 
-    <div class="article-title-wrapper">
-        <h2 class="article-title">
-            <a href="/posts/rope/"></a>
-        </h2>
     
-        
+
+    
+      <link rel="canonical" href="http://localhost:1313/vlarich.github.io/posts/rope/">
+    
+
+    
+    
+    <meta property="og:url" content="http://localhost:1313/vlarich.github.io/posts/rope/">
+  <meta property="og:site_name" content="VLA RICH Hugo Site">
+  <meta property="og:title" content="VLA RICH Hugo Site">
+  <meta property="og:description" content="https://yuanchaofa.com/post/hands-on-rope-position-embedding class MultiHeadAttentionWithRoPE(torch.nn.Module): &#34;&#34;&#34; 带 RoPE 的多头注意力 &#34;&#34;&#34; def __init__(self, d_model: int, num_heads: int, max_seq_len: int = 4096): super().__init__() assert d_model % num_heads == 0 self.d_model = d_model self.num_heads = num_heads self.head_dim = d_model // num_heads self.q_proj = torch.nn.Linear(d_model, d_model, bias=False) self.k_proj = torch.nn.Linear(d_model, d_model, bias=False) self.v_proj = torch.nn.Linear(d_model, d_model, bias=False) self.o_proj = torch.nn.Linear(d_model, d_model, bias=False) # RoPE self.rope = RotaryPositionEmbedding(self.head_dim, max_seq_len) def forward(self, x: torch.Tensor, mask: torch.Tensor = None): &#34;&#34;&#34; Args: x: 输入，shape (batch, seq_len, d_model) mask: 注意力掩码，shape (seq_len, seq_len) &#34;&#34;&#34; batch, seq_len, _ = x.shape # 线性投影 q = self.q_proj(x) k = self.k_proj(x) v = self.v_proj(x) # 重塑为多头形式 q = q.view(batch, seq_len, self.num_heads, self.head_dim) k = k.view(batch, seq_len, self.num_heads, self.head_dim) v = v.view(batch, seq_len, self.num_heads, self.head_dim) # 应用 RoPE（只对 Q 和 K） q, k = self.rope(q, k) #rope # 转置用于矩阵乘法：(batch, num_heads, seq_len, head_dim) q = q.transpose(1, 2) k = k.transpose(1, 2) v = v.transpose(1, 2) # 计算注意力分数 scale = self.head_dim ** -0.5 attn_scores = torch.matmul(q, k.transpose(-2, -1)) * scale if mask is not None: attn_scores = attn_scores.masked_fill(mask == 0, float(&#39;-inf&#39;)) attn_probs = torch.softmax(attn_scores, dim=-1) # 加权求和 attn_output = torch.matmul(attn_probs, v) # 重塑并输出投影 attn_output = attn_output.transpose(1, 2).contiguous() attn_output = attn_output.view(batch, seq_len, self.d_model) output = self.o_proj(attn_output) return output # 测试 mha = MultiHeadAttentionWithRoPE(d_model=512, num_heads=8) x = torch.randn(2, 128, 512) output = mha(x) print(f&#34;Input shape: {x.shape}&#34;) print(f&#34;Output shape: {output.shape}&#34;) class RotaryPositionEmbedding(torch.nn.Module): &#34;&#34;&#34; 完整的 RoPE 实现 &#34;&#34;&#34; def __init__(self, dim: int, max_seq_len: int = 4096, theta: float = 10000.0): &#34;&#34;&#34; Args: dim: 每个注意力头的维度 max_seq_len: 最大序列长度 theta: 基础频率参数 &#34;&#34;&#34; super().__init__() self.dim = dim self.max_seq_len = max_seq_len self.theta = theta # 预计算并缓存 sin/cos 值 cos, sin = get_rotary_embedding(dim, max_seq_len, theta) self.register_buffer(&#39;cos_cached&#39;, cos) self.register_buffer(&#39;sin_cached&#39;, sin) def forward(self, q: torch.Tensor, k: torch.Tensor, positions: torch.Tensor = None): &#34;&#34;&#34; 对 Query 和 Key 应用 RoPE Args: q: Query，shape (batch, seq_len, num_heads, head_dim) k: Key，shape (batch, seq_len, num_heads, head_dim) positions: 位置索引，默认为 [0, 1, 2, ..., seq_len-1] Returns: q_rot, k_rot: 旋转后的 Query 和 Key &#34;&#34;&#34; seq_len = q.shape[1] # 获取当前序列长度的 cos/sin cos = self.cos_cached[:seq_len] sin = self.sin_cached[:seq_len] # 应用旋转 q_rot, k_rot = apply_rotary_pos_emb(q, k, cos, sin) return q_rot, k_rot # 测试 rope = RotaryPositionEmbedding(dim=64, max_seq_len=4096) # 模拟输入 batch_size = 2 seq_len = 128 num_heads = 8 head_dim = 64 q = torch.randn(batch_size, seq_len, num_heads, head_dim) k = torch.randn(batch_size, seq_len, num_heads, head_dim) q_rot, k_rot = rope(q, k) print(f&#34;Q_rot shape: {q_rot.shape}&#34;) print(f&#34;K_rot shape: {k_rot.shape}&#34;)">
+  <meta property="og:locale" content="en_us">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+
+  <meta itemprop="name" content="VLA RICH Hugo Site">
+  <meta itemprop="description" content="https://yuanchaofa.com/post/hands-on-rope-position-embedding class MultiHeadAttentionWithRoPE(torch.nn.Module): &#34;&#34;&#34; 带 RoPE 的多头注意力 &#34;&#34;&#34; def __init__(self, d_model: int, num_heads: int, max_seq_len: int = 4096): super().__init__() assert d_model % num_heads == 0 self.d_model = d_model self.num_heads = num_heads self.head_dim = d_model // num_heads self.q_proj = torch.nn.Linear(d_model, d_model, bias=False) self.k_proj = torch.nn.Linear(d_model, d_model, bias=False) self.v_proj = torch.nn.Linear(d_model, d_model, bias=False) self.o_proj = torch.nn.Linear(d_model, d_model, bias=False) # RoPE self.rope = RotaryPositionEmbedding(self.head_dim, max_seq_len) def forward(self, x: torch.Tensor, mask: torch.Tensor = None): &#34;&#34;&#34; Args: x: 输入，shape (batch, seq_len, d_model) mask: 注意力掩码，shape (seq_len, seq_len) &#34;&#34;&#34; batch, seq_len, _ = x.shape # 线性投影 q = self.q_proj(x) k = self.k_proj(x) v = self.v_proj(x) # 重塑为多头形式 q = q.view(batch, seq_len, self.num_heads, self.head_dim) k = k.view(batch, seq_len, self.num_heads, self.head_dim) v = v.view(batch, seq_len, self.num_heads, self.head_dim) # 应用 RoPE（只对 Q 和 K） q, k = self.rope(q, k) #rope # 转置用于矩阵乘法：(batch, num_heads, seq_len, head_dim) q = q.transpose(1, 2) k = k.transpose(1, 2) v = v.transpose(1, 2) # 计算注意力分数 scale = self.head_dim ** -0.5 attn_scores = torch.matmul(q, k.transpose(-2, -1)) * scale if mask is not None: attn_scores = attn_scores.masked_fill(mask == 0, float(&#39;-inf&#39;)) attn_probs = torch.softmax(attn_scores, dim=-1) # 加权求和 attn_output = torch.matmul(attn_probs, v) # 重塑并输出投影 attn_output = attn_output.transpose(1, 2).contiguous() attn_output = attn_output.view(batch, seq_len, self.d_model) output = self.o_proj(attn_output) return output # 测试 mha = MultiHeadAttentionWithRoPE(d_model=512, num_heads=8) x = torch.randn(2, 128, 512) output = mha(x) print(f&#34;Input shape: {x.shape}&#34;) print(f&#34;Output shape: {output.shape}&#34;) class RotaryPositionEmbedding(torch.nn.Module): &#34;&#34;&#34; 完整的 RoPE 实现 &#34;&#34;&#34; def __init__(self, dim: int, max_seq_len: int = 4096, theta: float = 10000.0): &#34;&#34;&#34; Args: dim: 每个注意力头的维度 max_seq_len: 最大序列长度 theta: 基础频率参数 &#34;&#34;&#34; super().__init__() self.dim = dim self.max_seq_len = max_seq_len self.theta = theta # 预计算并缓存 sin/cos 值 cos, sin = get_rotary_embedding(dim, max_seq_len, theta) self.register_buffer(&#39;cos_cached&#39;, cos) self.register_buffer(&#39;sin_cached&#39;, sin) def forward(self, q: torch.Tensor, k: torch.Tensor, positions: torch.Tensor = None): &#34;&#34;&#34; 对 Query 和 Key 应用 RoPE Args: q: Query，shape (batch, seq_len, num_heads, head_dim) k: Key，shape (batch, seq_len, num_heads, head_dim) positions: 位置索引，默认为 [0, 1, 2, ..., seq_len-1] Returns: q_rot, k_rot: 旋转后的 Query 和 Key &#34;&#34;&#34; seq_len = q.shape[1] # 获取当前序列长度的 cos/sin cos = self.cos_cached[:seq_len] sin = self.sin_cached[:seq_len] # 应用旋转 q_rot, k_rot = apply_rotary_pos_emb(q, k, cos, sin) return q_rot, k_rot # 测试 rope = RotaryPositionEmbedding(dim=64, max_seq_len=4096) # 模拟输入 batch_size = 2 seq_len = 128 num_heads = 8 head_dim = 64 q = torch.randn(batch_size, seq_len, num_heads, head_dim) k = torch.randn(batch_size, seq_len, num_heads, head_dim) q_rot, k_rot = rope(q, k) print(f&#34;Q_rot shape: {q_rot.shape}&#34;) print(f&#34;K_rot shape: {k_rot.shape}&#34;)">
+  <meta itemprop="wordCount" content="382">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="VLA RICH Hugo Site">
+  <meta name="twitter:description" content="https://yuanchaofa.com/post/hands-on-rope-position-embedding class MultiHeadAttentionWithRoPE(torch.nn.Module): &#34;&#34;&#34; 带 RoPE 的多头注意力 &#34;&#34;&#34; def __init__(self, d_model: int, num_heads: int, max_seq_len: int = 4096): super().__init__() assert d_model % num_heads == 0 self.d_model = d_model self.num_heads = num_heads self.head_dim = d_model // num_heads self.q_proj = torch.nn.Linear(d_model, d_model, bias=False) self.k_proj = torch.nn.Linear(d_model, d_model, bias=False) self.v_proj = torch.nn.Linear(d_model, d_model, bias=False) self.o_proj = torch.nn.Linear(d_model, d_model, bias=False) # RoPE self.rope = RotaryPositionEmbedding(self.head_dim, max_seq_len) def forward(self, x: torch.Tensor, mask: torch.Tensor = None): &#34;&#34;&#34; Args: x: 输入，shape (batch, seq_len, d_model) mask: 注意力掩码，shape (seq_len, seq_len) &#34;&#34;&#34; batch, seq_len, _ = x.shape # 线性投影 q = self.q_proj(x) k = self.k_proj(x) v = self.v_proj(x) # 重塑为多头形式 q = q.view(batch, seq_len, self.num_heads, self.head_dim) k = k.view(batch, seq_len, self.num_heads, self.head_dim) v = v.view(batch, seq_len, self.num_heads, self.head_dim) # 应用 RoPE（只对 Q 和 K） q, k = self.rope(q, k) #rope # 转置用于矩阵乘法：(batch, num_heads, seq_len, head_dim) q = q.transpose(1, 2) k = k.transpose(1, 2) v = v.transpose(1, 2) # 计算注意力分数 scale = self.head_dim ** -0.5 attn_scores = torch.matmul(q, k.transpose(-2, -1)) * scale if mask is not None: attn_scores = attn_scores.masked_fill(mask == 0, float(&#39;-inf&#39;)) attn_probs = torch.softmax(attn_scores, dim=-1) # 加权求和 attn_output = torch.matmul(attn_probs, v) # 重塑并输出投影 attn_output = attn_output.transpose(1, 2).contiguous() attn_output = attn_output.view(batch, seq_len, self.d_model) output = self.o_proj(attn_output) return output # 测试 mha = MultiHeadAttentionWithRoPE(d_model=512, num_heads=8) x = torch.randn(2, 128, 512) output = mha(x) print(f&#34;Input shape: {x.shape}&#34;) print(f&#34;Output shape: {output.shape}&#34;) class RotaryPositionEmbedding(torch.nn.Module): &#34;&#34;&#34; 完整的 RoPE 实现 &#34;&#34;&#34; def __init__(self, dim: int, max_seq_len: int = 4096, theta: float = 10000.0): &#34;&#34;&#34; Args: dim: 每个注意力头的维度 max_seq_len: 最大序列长度 theta: 基础频率参数 &#34;&#34;&#34; super().__init__() self.dim = dim self.max_seq_len = max_seq_len self.theta = theta # 预计算并缓存 sin/cos 值 cos, sin = get_rotary_embedding(dim, max_seq_len, theta) self.register_buffer(&#39;cos_cached&#39;, cos) self.register_buffer(&#39;sin_cached&#39;, sin) def forward(self, q: torch.Tensor, k: torch.Tensor, positions: torch.Tensor = None): &#34;&#34;&#34; 对 Query 和 Key 应用 RoPE Args: q: Query，shape (batch, seq_len, num_heads, head_dim) k: Key，shape (batch, seq_len, num_heads, head_dim) positions: 位置索引，默认为 [0, 1, 2, ..., seq_len-1] Returns: q_rot, k_rot: 旋转后的 Query 和 Key &#34;&#34;&#34; seq_len = q.shape[1] # 获取当前序列长度的 cos/sin cos = self.cos_cached[:seq_len] sin = self.sin_cached[:seq_len] # 应用旋转 q_rot, k_rot = apply_rotary_pos_emb(q, k, cos, sin) return q_rot, k_rot # 测试 rope = RotaryPositionEmbedding(dim=64, max_seq_len=4096) # 模拟输入 batch_size = 2 seq_len = 128 num_heads = 8 head_dim = 64 q = torch.randn(batch_size, seq_len, num_heads, head_dim) k = torch.randn(batch_size, seq_len, num_heads, head_dim) q_rot, k_rot = rope(q, k) print(f&#34;Q_rot shape: {q_rot.shape}&#34;) print(f&#34;K_rot shape: {k_rot.shape}&#34;)">
+
+	
+  </head><body class="ma0 avenir bg-near-white development is-page is-page page-RoPE">
+    
+   
+  
+
+  <header>
+    <div class="bg-black">
+      <nav class="pv3 ph3 ph4-ns" role="navigation">
+  <div class="flex-l center items-center justify-between">
+    <a href="/vlarich.github.io/" class="f3 fw2 hover-white white-90 dib no-underline">
+      
+        VLA RICH Hugo Site
+      
+    </a>
+    <div class="flex-l items-center">
+      
+
+      
+      <div class="ananke-socials"></div>
+
     </div>
+  </div>
+</nav>
 
-    
-    
-    
-    
-    
-    
-    
-    <footer class="article-meta">
-        
-            <div class="inline-meta">
-                
-
-                
-                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-  <path stroke="none" d="M0 0h24v24H0z"/>
-  <circle cx="12" cy="12" r="9" />
-  <polyline points="12 7 12 12 15 15" />
-</svg>
+    </div>
+  </header>
 
 
 
-                    <time class="article-time--reading">
-                        2 minutes read
-                    </time>
-                
-            </div>
-        
+    <main class="pb7" role="main">
+      
+  
 
-        
+  <article class="page-RoPE flex-l mw7 center ph3 flex-wrap justify-between">
+    <header class="mt4 w-100">
+      <aside class="instapaper_ignoref b helvetica tracked ttu">
+          
+        Posts
+      </aside><div id="sharing" class="mt3 ananke-socials"></div>
+<h1 class="f1 athelas mt3 mb1"></h1>
+      
+      
+      
 
-        
-    </footer>
-    
-</div>
-
-</header>
-
-    
-
-    <section class="article-content">
-    
-    
-    <h2 id=""><a class="link" href="https://yuanchaofa.com/post/hands-on-rope-position-embedding"  target="_blank" rel="noopener"
-    >https://yuanchaofa.com/post/hands-on-rope-position-embedding</a>
-</h2><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">class</span> <span style="color:#a6e22e">MultiHeadAttentionWithRoPE</span>(torch<span style="color:#f92672">.</span>nn<span style="color:#f92672">.</span>Module):
+      
+      
+    </header>
+    <div class="nested-copy-line-height lh-copy serif f4 nested-links mid-gray pr4-l w-100-l"><h2><a href="https://yuanchaofa.com/post/hands-on-rope-position-embedding">https://yuanchaofa.com/post/hands-on-rope-position-embedding</a></h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">class</span> <span style="color:#a6e22e">MultiHeadAttentionWithRoPE</span>(torch<span style="color:#f92672">.</span>nn<span style="color:#f92672">.</span>Module):
 </span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;&#34;&#34;
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">    带 RoPE 的多头注意力
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">    &#34;&#34;&#34;</span>
@@ -284,100 +366,23 @@
 </span></span><span style="display:flex;"><span>q_rot, k_rot <span style="color:#f92672">=</span> rope(q, k)
 </span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Q_rot shape: </span><span style="color:#e6db74">{</span>q_rot<span style="color:#f92672">.</span>shape<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
 </span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;K_rot shape: </span><span style="color:#e6db74">{</span>k_rot<span style="color:#f92672">.</span>shape<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
-</span></span></code></pre></div>
-</section>
+</span></span></code></pre></div><ul class="pa0">
+  
+</ul>
 
+      
+    </div></article>
 
-    <footer class="article-meta article-footer">
-    
-
-    </footer>
-
-
-    
-</article>
-
-    
-
-    
-
-     
-    
-        
-        <div class="disqus-container">
-    
+    </main>
+    <footer class="bg-black bottom-0 w-100 pa3" role="contentinfo">
+  <div class="flex justify-between">
+  <a class="f4 fw4 hover-white white-70 dn dib-ns pv2 ph3 no-underline" href="http://localhost:1313/vlarich.github.io/" >
+    &copy;  VLA RICH Hugo Site 2026 
+  </a>
+    <div><div class="ananke-socials"></div>
 </div>
-
-<style>
-    .disqus-container {
-        background-color: var(--card-background);
-        border-radius: var(--card-border-radius);
-        box-shadow: var(--shadow-l1);
-        padding: var(--card-padding);
-    }
-</style>
-
-<script>
-    window.addEventListener('onColorSchemeChange', (e) => {
-        if (typeof DISQUS == 'object') {
-            DISQUS.reset({
-                reload: true
-            });
-        }
-    })
-</script>
-    
-
-    <footer class="site-footer">
-    <section class="copyright">
-        &copy; 
-        
-        2026 My New Hugo Site
-    </section>
-    
-    <section class="powerby">
-        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
-        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="4.0.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
-    </section>
+  </div>
 </footer>
 
-
-    
-
-
-
-<script type="module">
-    import gallery from '\/ts\/gallery.js';
-
-    const articleContent = document.querySelector('.article-content');
-    const shouldLoad = articleContent && (articleContent.querySelectorAll('figure').length > 0 || articleContent.querySelectorAll('img.gallery-image').length > 0);
-    
-    if (shouldLoad) {
-        gallery(articleContent);
-
-        const PhotoSwipeLightbox = (await import("https:\/\/cdn.jsdelivr.net\/npm\/photoswipe@5.4.4\/dist\/photoswipe-lightbox.esm.min.js")).default;
-        const styleHref = "https:\/\/cdn.jsdelivr.net\/npm\/photoswipe@5.4.4\/dist\/photoswipe.css";
-
-        const styleTag = document.createElement('link');
-        styleTag.rel = 'stylesheet';
-        styleTag.href = styleHref;
-        document.head.appendChild(styleTag);
-
-        const lightbox = new PhotoSwipeLightbox({
-            gallerySelector: '.article-content',
-            childSelector: 'figure a.image-link',
-            pswpModule: () => import("https:\/\/cdn.jsdelivr.net\/npm\/photoswipe@5.4.4\/dist\/photoswipe.esm.min.js")
-        });
-        lightbox.init();
-    }
-</script>
-    
-
-            </main>
-        </div>
-        
-<script type="text/javascript" src="/ts/main.acaf849f2b273f6a8368a58b001f336738d0c948d92e79b116467d0c7515f932.js" defer></script>
-
-
-    </body>
+  </body>
 </html>

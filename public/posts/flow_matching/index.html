@@ -1,156 +1,199 @@
 <!DOCTYPE html>
-<html lang="en-us" dir="ltr">
-    <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="# 作者：张云聪 # 链接：https://zhuanlan.zhihu.com/p/28731517852 # 来源：知乎 # 著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。 import torch import torch.nn as nn import matplotlib.pyplot as plt import numpy as np # 超参数 dim = 2 # 数据维度（2D点） num_samples = 1000 num_steps = 50 # ODE求解步数 lr = 1e-3 epochs = 5000 # 目标分布：正弦曲线上的点（x1坐标） x1_samples = torch.rand(num_samples, 1) * 4 * torch.pi # 0到4π y1_samples = torch.sin(x1_samples) # y=sin(x) target_data = torch.cat([x1_samples, y1_samples], dim=1) # 噪声分布：高斯噪声（x0坐标） noise_data = torch.randn(num_samples, dim) * 2 class VectorField(nn.Module): def __init__(self): super().__init__() self.net = nn.Sequential( nn.Linear(dim + 1, 64), # 输入维度: x (2) + t (1) = 3 nn.ReLU(), nn.Linear(64, dim) ) def forward(self, x, t): # 直接拼接x和t（t的形状需为(batch_size, 1)） return self.net(torch.cat([x, t], dim=1)) model = VectorField() optimizer = torch.optim.Adam(model.parameters(), lr=lr) for epoch in range(epochs): # 随机采样噪声点和目标点 idx = torch.randperm(num_samples) x0 = noise_data[idx] # 起点：噪声 x1 = target_data[idx] # 终点：正弦曲线 # 时间t的形状为 (batch_size, 1) t = torch.rand(x0.size(0), 1) # 例如：shape (1000, 1) # 线性插值生成中间点 xt = (1 - t) * x0 + t * x1 # 模型预测向量场（直接传入t，无需squeeze） vt_pred = model(xt, t) # t的维度保持不变 # 时间也是模型的输出 # 目标向量场：x1 - x0 vt_target = x1 - x0 # 对t求导 # 损失函数 loss = torch.mean((vt_pred - vt_target)**2) # L2 loss # 反向传播 optimizer.zero_grad() loss.backward() optimizer.step() x = noise_data[0:1] # 初始噪声点 trajectory = [x.detach().numpy()] tag = torch.from_numpy(np.array([1])) # 数值求解ODE（欧拉法） t = 0 delta_t = 1 / num_steps with torch.no_grad(): for i in range(num_steps): vt = model(x, torch.tensor([[t]], dtype=torch.float32)) # 时间也是模型的输出 t += delta_t x = x + vt * delta_t # x(t+Δt) = x(t) + v(t)Δt trajectory.append(x.detach().numpy()) trajectory = torch.tensor(trajectory).squeeze() print(trajectory[-1] / (torch.pi / 10 * 4)) # 绘制向量场和生成轨迹 plt.figure(figsize=(10, 5)) plt.scatter(target_data[:,0], target_data[:,1], c=&#39;blue&#39;, label=&#39;Target (sin(x))&#39;) plt.scatter(noise_data[:,0], noise_data[:,1], c=&#39;red&#39;, alpha=0.3, label=&#39;Noise&#39;) plt.plot(trajectory[:,0], trajectory[:,1], &#39;g-&#39;, linewidth=2, label=&#39;Generated Path&#39;) plt.legend() plt.title(&#34;Flow Matching: From Noise to Target Distribution&#34;) plt.show() ">
-<title>My New Hugo Site</title>
+<html lang="en-us">
+  <head><script src="/vlarich.github.io/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=vlarich.github.io/livereload" data-no-instant defer></script>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    
+    <title>VLA RICH Hugo Site</title>
+    <meta name="viewport" content="width=device-width,minimum-scale=1">
+    <meta name="description" content="# 作者：张云聪
+# 链接：https://zhuanlan.zhihu.com/p/28731517852
+# 来源：知乎
+# 著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
 
+import torch
+import torch.nn as nn
+import matplotlib.pyplot as plt
+import numpy as np
 
-<link rel="canonical" href="https://example.org/posts/flow_matching/">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap">
+# 超参数
+dim = 2         # 数据维度（2D点）
+num_samples = 1000
+num_steps = 50  # ODE求解步数
+lr = 1e-3
+epochs = 5000
 
+# 目标分布：正弦曲线上的点（x1坐标）
+x1_samples = torch.rand(num_samples, 1) * 4 * torch.pi  # 0到4π
+y1_samples = torch.sin(x1_samples)                      # y=sin(x)
+target_data = torch.cat([x1_samples, y1_samples], dim=1)
 
-<link rel="stylesheet" href="/scss/style.min.389e156f5e9bb13df5a924cfa99dfb9c39f3e01e68d9e146cd65bdae963be145.css"><meta property='og:title' content="My New Hugo Site">
-<meta property='og:description' content="# 作者：张云聪 # 链接：https://zhuanlan.zhihu.com/p/28731517852 # 来源：知乎 # 著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。 import torch import torch.nn as nn import matplotlib.pyplot as plt import numpy as np # 超参数 dim = 2 # 数据维度（2D点） num_samples = 1000 num_steps = 50 # ODE求解步数 lr = 1e-3 epochs = 5000 # 目标分布：正弦曲线上的点（x1坐标） x1_samples = torch.rand(num_samples, 1) * 4 * torch.pi # 0到4π y1_samples = torch.sin(x1_samples) # y=sin(x) target_data = torch.cat([x1_samples, y1_samples], dim=1) # 噪声分布：高斯噪声（x0坐标） noise_data = torch.randn(num_samples, dim) * 2 class VectorField(nn.Module): def __init__(self): super().__init__() self.net = nn.Sequential( nn.Linear(dim + 1, 64), # 输入维度: x (2) + t (1) = 3 nn.ReLU(), nn.Linear(64, dim) ) def forward(self, x, t): # 直接拼接x和t（t的形状需为(batch_size, 1)） return self.net(torch.cat([x, t], dim=1)) model = VectorField() optimizer = torch.optim.Adam(model.parameters(), lr=lr) for epoch in range(epochs): # 随机采样噪声点和目标点 idx = torch.randperm(num_samples) x0 = noise_data[idx] # 起点：噪声 x1 = target_data[idx] # 终点：正弦曲线 # 时间t的形状为 (batch_size, 1) t = torch.rand(x0.size(0), 1) # 例如：shape (1000, 1) # 线性插值生成中间点 xt = (1 - t) * x0 + t * x1 # 模型预测向量场（直接传入t，无需squeeze） vt_pred = model(xt, t) # t的维度保持不变 # 时间也是模型的输出 # 目标向量场：x1 - x0 vt_target = x1 - x0 # 对t求导 # 损失函数 loss = torch.mean((vt_pred - vt_target)**2) # L2 loss # 反向传播 optimizer.zero_grad() loss.backward() optimizer.step() x = noise_data[0:1] # 初始噪声点 trajectory = [x.detach().numpy()] tag = torch.from_numpy(np.array([1])) # 数值求解ODE（欧拉法） t = 0 delta_t = 1 / num_steps with torch.no_grad(): for i in range(num_steps): vt = model(x, torch.tensor([[t]], dtype=torch.float32)) # 时间也是模型的输出 t += delta_t x = x + vt * delta_t # x(t+Δt) = x(t) + v(t)Δt trajectory.append(x.detach().numpy()) trajectory = torch.tensor(trajectory).squeeze() print(trajectory[-1] / (torch.pi / 10 * 4)) # 绘制向量场和生成轨迹 plt.figure(figsize=(10, 5)) plt.scatter(target_data[:,0], target_data[:,1], c=&#39;blue&#39;, label=&#39;Target (sin(x))&#39;) plt.scatter(noise_data[:,0], noise_data[:,1], c=&#39;red&#39;, alpha=0.3, label=&#39;Noise&#39;) plt.plot(trajectory[:,0], trajectory[:,1], &#39;g-&#39;, linewidth=2, label=&#39;Generated Path&#39;) plt.legend() plt.title(&#34;Flow Matching: From Noise to Target Distribution&#34;) plt.show() ">
-<meta property='og:url' content='https://example.org/posts/flow_matching/'>
-<meta property='og:site_name' content='My New Hugo Site'>
-<meta property='og:type' content='article'><meta property='article:section' content='Posts' />
-<meta name="twitter:title" content="My New Hugo Site">
-<meta name="twitter:description" content="# 作者：张云聪 # 链接：https://zhuanlan.zhihu.com/p/28731517852 # 来源：知乎 # 著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。 import torch import torch.nn as nn import matplotlib.pyplot as plt import numpy as np # 超参数 dim = 2 # 数据维度（2D点） num_samples = 1000 num_steps = 50 # ODE求解步数 lr = 1e-3 epochs = 5000 # 目标分布：正弦曲线上的点（x1坐标） x1_samples = torch.rand(num_samples, 1) * 4 * torch.pi # 0到4π y1_samples = torch.sin(x1_samples) # y=sin(x) target_data = torch.cat([x1_samples, y1_samples], dim=1) # 噪声分布：高斯噪声（x0坐标） noise_data = torch.randn(num_samples, dim) * 2 class VectorField(nn.Module): def __init__(self): super().__init__() self.net = nn.Sequential( nn.Linear(dim + 1, 64), # 输入维度: x (2) + t (1) = 3 nn.ReLU(), nn.Linear(64, dim) ) def forward(self, x, t): # 直接拼接x和t（t的形状需为(batch_size, 1)） return self.net(torch.cat([x, t], dim=1)) model = VectorField() optimizer = torch.optim.Adam(model.parameters(), lr=lr) for epoch in range(epochs): # 随机采样噪声点和目标点 idx = torch.randperm(num_samples) x0 = noise_data[idx] # 起点：噪声 x1 = target_data[idx] # 终点：正弦曲线 # 时间t的形状为 (batch_size, 1) t = torch.rand(x0.size(0), 1) # 例如：shape (1000, 1) # 线性插值生成中间点 xt = (1 - t) * x0 + t * x1 # 模型预测向量场（直接传入t，无需squeeze） vt_pred = model(xt, t) # t的维度保持不变 # 时间也是模型的输出 # 目标向量场：x1 - x0 vt_target = x1 - x0 # 对t求导 # 损失函数 loss = torch.mean((vt_pred - vt_target)**2) # L2 loss # 反向传播 optimizer.zero_grad() loss.backward() optimizer.step() x = noise_data[0:1] # 初始噪声点 trajectory = [x.detach().numpy()] tag = torch.from_numpy(np.array([1])) # 数值求解ODE（欧拉法） t = 0 delta_t = 1 / num_steps with torch.no_grad(): for i in range(num_steps): vt = model(x, torch.tensor([[t]], dtype=torch.float32)) # 时间也是模型的输出 t += delta_t x = x + vt * delta_t # x(t+Δt) = x(t) + v(t)Δt trajectory.append(x.detach().numpy()) trajectory = torch.tensor(trajectory).squeeze() print(trajectory[-1] / (torch.pi / 10 * 4)) # 绘制向量场和生成轨迹 plt.figure(figsize=(10, 5)) plt.scatter(target_data[:,0], target_data[:,1], c=&#39;blue&#39;, label=&#39;Target (sin(x))&#39;) plt.scatter(noise_data[:,0], noise_data[:,1], c=&#39;red&#39;, alpha=0.3, label=&#39;Noise&#39;) plt.plot(trajectory[:,0], trajectory[:,1], &#39;g-&#39;, linewidth=2, label=&#39;Generated Path&#39;) plt.legend() plt.title(&#34;Flow Matching: From Noise to Target Distribution&#34;) plt.show() ">
-    </head>
-    <body class="
-    article-page
-    ">
-    <script>
-        (function() {
-            const colorSchemeKey = 'StackColorScheme';
-            if(!localStorage.getItem(colorSchemeKey)){
-                localStorage.setItem(colorSchemeKey, "auto");
-            }
-        })();
-    </script><script>
-    (function() {
-        const colorSchemeKey = 'StackColorScheme';
-        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
-        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+# 噪声分布：高斯噪声（x0坐标）
+noise_data = torch.randn(num_samples, dim) * 2
 
-        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
-            
-
-            document.documentElement.dataset.scheme = 'dark';
-        } else {
-            document.documentElement.dataset.scheme = 'light';
-        }
-    })();
-</script>
-<div class="container main-container flex on-phone--column compact"><aside class="sidebar left-sidebar sticky ">
-    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="Toggle Menu">
-        <span class="hamburger-box">
-            <span class="hamburger-inner"></span>
-        </span>
-    </button>
-
-    <header>
+class VectorField(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(dim &#43; 1, 64),  # 输入维度: x (2) &#43; t (1) = 3
+            nn.ReLU(),
+            nn.Linear(64, dim)
+        )
+  
+    def forward(self, x, t):
+        # 直接拼接x和t（t的形状需为(batch_size, 1)）
+        return self.net(torch.cat([x, t], dim=1))
         
-        
-        <div class="site-meta">
-            <h1 class="site-name"><a href="/">My New Hugo Site</a></h1>
-            <h2 class="site-description"></h2>
-        </div>
-    </header><ol class="menu" id="main-menu">
-        
-        
-        <li class="menu-bottom-section">
-            <ol class="menu">
+model = VectorField()
+optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-                
-                    <li id="dark-mode-toggle">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-  <path stroke="none" d="M0 0h24v24H0z"/>
-  <circle cx="8" cy="12" r="2" />
-  <rect x="2" y="6" width="20" height="12" rx="6" />
-</svg>
+for epoch in range(epochs):
+    # 随机采样噪声点和目标点
+    idx = torch.randperm(num_samples)
+    x0 = noise_data[idx]  # 起点：噪声
+    x1 = target_data[idx] # 终点：正弦曲线
+
+    # 时间t的形状为 (batch_size, 1)
+    t = torch.rand(x0.size(0), 1)  # 例如：shape (1000, 1)
+  
+    # 线性插值生成中间点
+    xt = (1 - t) * x0 &#43; t * x1
+  
+    # 模型预测向量场（直接传入t，无需squeeze）
+    vt_pred = model(xt, t)  # t的维度保持不变 # 时间也是模型的输出
+  
+    # 目标向量场：x1 - x0
+    vt_target = x1 - x0 # 对t求导
+  
+    # 损失函数
+    loss = torch.mean((vt_pred - vt_target)**2) # L2 loss
+  
+    # 反向传播
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+x = noise_data[0:1]  # 初始噪声点
+trajectory = [x.detach().numpy()]
+
+tag = torch.from_numpy(np.array([1]))
+# 数值求解ODE（欧拉法）
+t = 0
+delta_t = 1 / num_steps
+with torch.no_grad():
+    for i in range(num_steps):
+        vt = model(x, torch.tensor([[t]], dtype=torch.float32)) # 时间也是模型的输出
+        t &#43;= delta_t
+        x = x &#43; vt * delta_t  # x(t&#43;Δt) = x(t) &#43; v(t)Δt
+        trajectory.append(x.detach().numpy())
+
+trajectory = torch.tensor(trajectory).squeeze()
+
+print(trajectory[-1] / (torch.pi / 10 * 4))
+
+# 绘制向量场和生成轨迹
+plt.figure(figsize=(10, 5))
+plt.scatter(target_data[:,0], target_data[:,1], c=&#39;blue&#39;, label=&#39;Target (sin(x))&#39;)
+plt.scatter(noise_data[:,0], noise_data[:,1], c=&#39;red&#39;, alpha=0.3, label=&#39;Noise&#39;)
+plt.plot(trajectory[:,0], trajectory[:,1], &#39;g-&#39;, linewidth=2, label=&#39;Generated Path&#39;)
+plt.legend()
+plt.title(&#34;Flow Matching: From Noise to Target Distribution&#34;)
+plt.show()
+">
+    <meta name="generator" content="Hugo 0.157.0">
+    
+    
+    
+      <meta name="robots" content="noindex, nofollow">
+    
+    
+
+    
+<link rel="stylesheet" href="/vlarich.github.io/ananke/css/main.min.css" >
 
 
 
-                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-  <path stroke="none" d="M0 0h24v24H0z"/>
-  <circle cx="16" cy="12" r="2" />
-  <rect x="2" y="6" width="20" height="12" rx="6" />
-</svg>
-
-
-
-                        <span>Dark Mode</span>
-                    </li>
-                
-            </ol>
-        </li>
-    </ol>
-</aside>
 
     
 
-            <main class="main full-width">
-    <article class="main-article">
-    <header class="article-header">
 
-    <div class="article-details">
+    
+      
+
     
 
-    <div class="article-title-wrapper">
-        <h2 class="article-title">
-            <a href="/posts/flow_matching/"></a>
-        </h2>
     
-        
+
+    
+      <link rel="canonical" href="http://localhost:1313/vlarich.github.io/posts/flow_matching/">
+    
+
+    
+    
+    <meta property="og:url" content="http://localhost:1313/vlarich.github.io/posts/flow_matching/">
+  <meta property="og:site_name" content="VLA RICH Hugo Site">
+  <meta property="og:title" content="VLA RICH Hugo Site">
+  <meta property="og:description" content="# 作者：张云聪 # 链接：https://zhuanlan.zhihu.com/p/28731517852 # 来源：知乎 # 著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。 import torch import torch.nn as nn import matplotlib.pyplot as plt import numpy as np # 超参数 dim = 2 # 数据维度（2D点） num_samples = 1000 num_steps = 50 # ODE求解步数 lr = 1e-3 epochs = 5000 # 目标分布：正弦曲线上的点（x1坐标） x1_samples = torch.rand(num_samples, 1) * 4 * torch.pi # 0到4π y1_samples = torch.sin(x1_samples) # y=sin(x) target_data = torch.cat([x1_samples, y1_samples], dim=1) # 噪声分布：高斯噪声（x0坐标） noise_data = torch.randn(num_samples, dim) * 2 class VectorField(nn.Module): def __init__(self): super().__init__() self.net = nn.Sequential( nn.Linear(dim &#43; 1, 64), # 输入维度: x (2) &#43; t (1) = 3 nn.ReLU(), nn.Linear(64, dim) ) def forward(self, x, t): # 直接拼接x和t（t的形状需为(batch_size, 1)） return self.net(torch.cat([x, t], dim=1)) model = VectorField() optimizer = torch.optim.Adam(model.parameters(), lr=lr) for epoch in range(epochs): # 随机采样噪声点和目标点 idx = torch.randperm(num_samples) x0 = noise_data[idx] # 起点：噪声 x1 = target_data[idx] # 终点：正弦曲线 # 时间t的形状为 (batch_size, 1) t = torch.rand(x0.size(0), 1) # 例如：shape (1000, 1) # 线性插值生成中间点 xt = (1 - t) * x0 &#43; t * x1 # 模型预测向量场（直接传入t，无需squeeze） vt_pred = model(xt, t) # t的维度保持不变 # 时间也是模型的输出 # 目标向量场：x1 - x0 vt_target = x1 - x0 # 对t求导 # 损失函数 loss = torch.mean((vt_pred - vt_target)**2) # L2 loss # 反向传播 optimizer.zero_grad() loss.backward() optimizer.step() x = noise_data[0:1] # 初始噪声点 trajectory = [x.detach().numpy()] tag = torch.from_numpy(np.array([1])) # 数值求解ODE（欧拉法） t = 0 delta_t = 1 / num_steps with torch.no_grad(): for i in range(num_steps): vt = model(x, torch.tensor([[t]], dtype=torch.float32)) # 时间也是模型的输出 t &#43;= delta_t x = x &#43; vt * delta_t # x(t&#43;Δt) = x(t) &#43; v(t)Δt trajectory.append(x.detach().numpy()) trajectory = torch.tensor(trajectory).squeeze() print(trajectory[-1] / (torch.pi / 10 * 4)) # 绘制向量场和生成轨迹 plt.figure(figsize=(10, 5)) plt.scatter(target_data[:,0], target_data[:,1], c=&#39;blue&#39;, label=&#39;Target (sin(x))&#39;) plt.scatter(noise_data[:,0], noise_data[:,1], c=&#39;red&#39;, alpha=0.3, label=&#39;Noise&#39;) plt.plot(trajectory[:,0], trajectory[:,1], &#39;g-&#39;, linewidth=2, label=&#39;Generated Path&#39;) plt.legend() plt.title(&#34;Flow Matching: From Noise to Target Distribution&#34;) plt.show()">
+  <meta property="og:locale" content="en_us">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+
+  <meta itemprop="name" content="VLA RICH Hugo Site">
+  <meta itemprop="description" content="# 作者：张云聪 # 链接：https://zhuanlan.zhihu.com/p/28731517852 # 来源：知乎 # 著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。 import torch import torch.nn as nn import matplotlib.pyplot as plt import numpy as np # 超参数 dim = 2 # 数据维度（2D点） num_samples = 1000 num_steps = 50 # ODE求解步数 lr = 1e-3 epochs = 5000 # 目标分布：正弦曲线上的点（x1坐标） x1_samples = torch.rand(num_samples, 1) * 4 * torch.pi # 0到4π y1_samples = torch.sin(x1_samples) # y=sin(x) target_data = torch.cat([x1_samples, y1_samples], dim=1) # 噪声分布：高斯噪声（x0坐标） noise_data = torch.randn(num_samples, dim) * 2 class VectorField(nn.Module): def __init__(self): super().__init__() self.net = nn.Sequential( nn.Linear(dim &#43; 1, 64), # 输入维度: x (2) &#43; t (1) = 3 nn.ReLU(), nn.Linear(64, dim) ) def forward(self, x, t): # 直接拼接x和t（t的形状需为(batch_size, 1)） return self.net(torch.cat([x, t], dim=1)) model = VectorField() optimizer = torch.optim.Adam(model.parameters(), lr=lr) for epoch in range(epochs): # 随机采样噪声点和目标点 idx = torch.randperm(num_samples) x0 = noise_data[idx] # 起点：噪声 x1 = target_data[idx] # 终点：正弦曲线 # 时间t的形状为 (batch_size, 1) t = torch.rand(x0.size(0), 1) # 例如：shape (1000, 1) # 线性插值生成中间点 xt = (1 - t) * x0 &#43; t * x1 # 模型预测向量场（直接传入t，无需squeeze） vt_pred = model(xt, t) # t的维度保持不变 # 时间也是模型的输出 # 目标向量场：x1 - x0 vt_target = x1 - x0 # 对t求导 # 损失函数 loss = torch.mean((vt_pred - vt_target)**2) # L2 loss # 反向传播 optimizer.zero_grad() loss.backward() optimizer.step() x = noise_data[0:1] # 初始噪声点 trajectory = [x.detach().numpy()] tag = torch.from_numpy(np.array([1])) # 数值求解ODE（欧拉法） t = 0 delta_t = 1 / num_steps with torch.no_grad(): for i in range(num_steps): vt = model(x, torch.tensor([[t]], dtype=torch.float32)) # 时间也是模型的输出 t &#43;= delta_t x = x &#43; vt * delta_t # x(t&#43;Δt) = x(t) &#43; v(t)Δt trajectory.append(x.detach().numpy()) trajectory = torch.tensor(trajectory).squeeze() print(trajectory[-1] / (torch.pi / 10 * 4)) # 绘制向量场和生成轨迹 plt.figure(figsize=(10, 5)) plt.scatter(target_data[:,0], target_data[:,1], c=&#39;blue&#39;, label=&#39;Target (sin(x))&#39;) plt.scatter(noise_data[:,0], noise_data[:,1], c=&#39;red&#39;, alpha=0.3, label=&#39;Noise&#39;) plt.plot(trajectory[:,0], trajectory[:,1], &#39;g-&#39;, linewidth=2, label=&#39;Generated Path&#39;) plt.legend() plt.title(&#34;Flow Matching: From Noise to Target Distribution&#34;) plt.show()">
+  <meta itemprop="wordCount" content="286">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="VLA RICH Hugo Site">
+  <meta name="twitter:description" content="# 作者：张云聪 # 链接：https://zhuanlan.zhihu.com/p/28731517852 # 来源：知乎 # 著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。 import torch import torch.nn as nn import matplotlib.pyplot as plt import numpy as np # 超参数 dim = 2 # 数据维度（2D点） num_samples = 1000 num_steps = 50 # ODE求解步数 lr = 1e-3 epochs = 5000 # 目标分布：正弦曲线上的点（x1坐标） x1_samples = torch.rand(num_samples, 1) * 4 * torch.pi # 0到4π y1_samples = torch.sin(x1_samples) # y=sin(x) target_data = torch.cat([x1_samples, y1_samples], dim=1) # 噪声分布：高斯噪声（x0坐标） noise_data = torch.randn(num_samples, dim) * 2 class VectorField(nn.Module): def __init__(self): super().__init__() self.net = nn.Sequential( nn.Linear(dim &#43; 1, 64), # 输入维度: x (2) &#43; t (1) = 3 nn.ReLU(), nn.Linear(64, dim) ) def forward(self, x, t): # 直接拼接x和t（t的形状需为(batch_size, 1)） return self.net(torch.cat([x, t], dim=1)) model = VectorField() optimizer = torch.optim.Adam(model.parameters(), lr=lr) for epoch in range(epochs): # 随机采样噪声点和目标点 idx = torch.randperm(num_samples) x0 = noise_data[idx] # 起点：噪声 x1 = target_data[idx] # 终点：正弦曲线 # 时间t的形状为 (batch_size, 1) t = torch.rand(x0.size(0), 1) # 例如：shape (1000, 1) # 线性插值生成中间点 xt = (1 - t) * x0 &#43; t * x1 # 模型预测向量场（直接传入t，无需squeeze） vt_pred = model(xt, t) # t的维度保持不变 # 时间也是模型的输出 # 目标向量场：x1 - x0 vt_target = x1 - x0 # 对t求导 # 损失函数 loss = torch.mean((vt_pred - vt_target)**2) # L2 loss # 反向传播 optimizer.zero_grad() loss.backward() optimizer.step() x = noise_data[0:1] # 初始噪声点 trajectory = [x.detach().numpy()] tag = torch.from_numpy(np.array([1])) # 数值求解ODE（欧拉法） t = 0 delta_t = 1 / num_steps with torch.no_grad(): for i in range(num_steps): vt = model(x, torch.tensor([[t]], dtype=torch.float32)) # 时间也是模型的输出 t &#43;= delta_t x = x &#43; vt * delta_t # x(t&#43;Δt) = x(t) &#43; v(t)Δt trajectory.append(x.detach().numpy()) trajectory = torch.tensor(trajectory).squeeze() print(trajectory[-1] / (torch.pi / 10 * 4)) # 绘制向量场和生成轨迹 plt.figure(figsize=(10, 5)) plt.scatter(target_data[:,0], target_data[:,1], c=&#39;blue&#39;, label=&#39;Target (sin(x))&#39;) plt.scatter(noise_data[:,0], noise_data[:,1], c=&#39;red&#39;, alpha=0.3, label=&#39;Noise&#39;) plt.plot(trajectory[:,0], trajectory[:,1], &#39;g-&#39;, linewidth=2, label=&#39;Generated Path&#39;) plt.legend() plt.title(&#34;Flow Matching: From Noise to Target Distribution&#34;) plt.show()">
+
+	
+  </head><body class="ma0 avenir bg-near-white development is-page is-page page-flow_matching">
+    
+   
+  
+
+  <header>
+    <div class="bg-black">
+      <nav class="pv3 ph3 ph4-ns" role="navigation">
+  <div class="flex-l center items-center justify-between">
+    <a href="/vlarich.github.io/" class="f3 fw2 hover-white white-90 dib no-underline">
+      
+        VLA RICH Hugo Site
+      
+    </a>
+    <div class="flex-l items-center">
+      
+
+      
+      <div class="ananke-socials"></div>
+
     </div>
+  </div>
+</nav>
 
-    
-    
-    
-    
-    
-    
-    
-    <footer class="article-meta">
-        
-            <div class="inline-meta">
-                
-
-                
-                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-  <path stroke="none" d="M0 0h24v24H0z"/>
-  <circle cx="12" cy="12" r="9" />
-  <polyline points="12 7 12 12 15 15" />
-</svg>
+    </div>
+  </header>
 
 
 
-                    <time class="article-time--reading">
-                        2 minutes read
-                    </time>
-                
-            </div>
-        
+    <main class="pb7" role="main">
+      
+  
 
-        
+  <article class="page-flow_matching flex-l mw7 center ph3 flex-wrap justify-between">
+    <header class="mt4 w-100">
+      <aside class="instapaper_ignoref b helvetica tracked ttu">
+          
+        Posts
+      </aside><div id="sharing" class="mt3 ananke-socials"></div>
+<h1 class="f1 athelas mt3 mb1"></h1>
+      
+      
+      
 
-        
-    </footer>
-    
-</div>
-
-</header>
-
-    
-
-    <section class="article-content">
-    
-    
-    <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#75715e"># 作者：张云聪</span>
+      
+      
+    </header>
+    <div class="nested-copy-line-height lh-copy serif f4 nested-links mid-gray pr4-l w-100-l"><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#75715e"># 作者：张云聪</span>
 </span></span><span style="display:flex;"><span><span style="color:#75715e"># 链接：https://zhuanlan.zhihu.com/p/28731517852</span>
 </span></span><span style="display:flex;"><span><span style="color:#75715e"># 来源：知乎</span>
 </span></span><span style="display:flex;"><span><span style="color:#75715e"># 著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。</span>
@@ -243,100 +286,23 @@
 </span></span><span style="display:flex;"><span>plt<span style="color:#f92672">.</span>legend()
 </span></span><span style="display:flex;"><span>plt<span style="color:#f92672">.</span>title(<span style="color:#e6db74">&#34;Flow Matching: From Noise to Target Distribution&#34;</span>)
 </span></span><span style="display:flex;"><span>plt<span style="color:#f92672">.</span>show()
-</span></span></code></pre></div>
-</section>
+</span></span></code></pre></div><ul class="pa0">
+  
+</ul>
 
+      
+    </div></article>
 
-    <footer class="article-meta article-footer">
-    
-
-    </footer>
-
-
-    
-</article>
-
-    
-
-    
-
-     
-    
-        
-        <div class="disqus-container">
-    
+    </main>
+    <footer class="bg-black bottom-0 w-100 pa3" role="contentinfo">
+  <div class="flex justify-between">
+  <a class="f4 fw4 hover-white white-70 dn dib-ns pv2 ph3 no-underline" href="http://localhost:1313/vlarich.github.io/" >
+    &copy;  VLA RICH Hugo Site 2026 
+  </a>
+    <div><div class="ananke-socials"></div>
 </div>
-
-<style>
-    .disqus-container {
-        background-color: var(--card-background);
-        border-radius: var(--card-border-radius);
-        box-shadow: var(--shadow-l1);
-        padding: var(--card-padding);
-    }
-</style>
-
-<script>
-    window.addEventListener('onColorSchemeChange', (e) => {
-        if (typeof DISQUS == 'object') {
-            DISQUS.reset({
-                reload: true
-            });
-        }
-    })
-</script>
-    
-
-    <footer class="site-footer">
-    <section class="copyright">
-        &copy; 
-        
-        2026 My New Hugo Site
-    </section>
-    
-    <section class="powerby">
-        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
-        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="4.0.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
-    </section>
+  </div>
 </footer>
 
-
-    
-
-
-
-<script type="module">
-    import gallery from '\/ts\/gallery.js';
-
-    const articleContent = document.querySelector('.article-content');
-    const shouldLoad = articleContent && (articleContent.querySelectorAll('figure').length > 0 || articleContent.querySelectorAll('img.gallery-image').length > 0);
-    
-    if (shouldLoad) {
-        gallery(articleContent);
-
-        const PhotoSwipeLightbox = (await import("https:\/\/cdn.jsdelivr.net\/npm\/photoswipe@5.4.4\/dist\/photoswipe-lightbox.esm.min.js")).default;
-        const styleHref = "https:\/\/cdn.jsdelivr.net\/npm\/photoswipe@5.4.4\/dist\/photoswipe.css";
-
-        const styleTag = document.createElement('link');
-        styleTag.rel = 'stylesheet';
-        styleTag.href = styleHref;
-        document.head.appendChild(styleTag);
-
-        const lightbox = new PhotoSwipeLightbox({
-            gallerySelector: '.article-content',
-            childSelector: 'figure a.image-link',
-            pswpModule: () => import("https:\/\/cdn.jsdelivr.net\/npm\/photoswipe@5.4.4\/dist\/photoswipe.esm.min.js")
-        });
-        lightbox.init();
-    }
-</script>
-    
-
-            </main>
-        </div>
-        
-<script type="text/javascript" src="/ts/main.acaf849f2b273f6a8368a58b001f336738d0c948d92e79b116467d0c7515f932.js" defer></script>
-
-
-    </body>
+  </body>
 </html>

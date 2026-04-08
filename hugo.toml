@@ -1,6 +1,6 @@
 baseURL = 'https://jiangyigithub.github.io/vlarich.github.io/'
 languageCode = 'en-us'
-title = 'My New Hugo Site'
+title = 'VLA RICH Hugo Site'
 theme = 'ananke'
 [caches]
   [caches.images]
