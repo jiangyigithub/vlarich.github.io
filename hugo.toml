@@ -1,7 +1,7 @@
 baseURL = 'https://jiangyigithub.github.io/vlarich.github.io/'
 languageCode = 'en-us'
 title = 'VLA RICH Hugo Site'
-theme = 'ananke'
+theme = 'gohugo-theme-ananke'
 
 # Sitemap configuration
 [sitemap]
