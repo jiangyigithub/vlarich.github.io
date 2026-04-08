@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en-us">
-  <head>
+  <head><script src="/vlarich.github.io/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=vlarich.github.io/livereload" data-no-instant defer></script>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     
@@ -90,14 +90,19 @@ print(f&#34;Gemma 300M 单层参数量: {count_parameters(block_300m) / 1e6:.2f}
     
     
     
-      <meta name="robots" content="index, follow">
+      <meta name="robots" content="noindex, nofollow">
     
+    <meta name="author" content="Your Name">
     
 
     
-<link rel="stylesheet" href="/vlarich.github.io/ananke/css/main.min.efe4d852f731d5d1fbb87718387202a97aafd768cdcdaed0662bbe6982e91824.css" >
+<link rel="stylesheet" href="/vlarich.github.io/ananke/css/main.min.css" >
 
 
+
+  
+    <link rel="stylesheet" href="/vlarich.github.io/custom.css">
+  
 
 
     
@@ -111,12 +116,12 @@ print(f&#34;Gemma 300M 单层参数量: {count_parameters(block_300m) / 1e6:.2f}
     
 
     
-      <link rel="canonical" href="https://jiangyigithub.github.io/vlarich.github.io/posts/gemma_decoder/">
+      <link rel="canonical" href="http://localhost:1313/vlarich.github.io/posts/gemma_decoder/">
     
 
     
     
-    <meta property="og:url" content="https://jiangyigithub.github.io/vlarich.github.io/posts/gemma_decoder/">
+    <meta property="og:url" content="http://localhost:1313/vlarich.github.io/posts/gemma_decoder/">
   <meta property="og:site_name" content="VLA RICH Hugo Site">
   <meta property="og:title" content="VLA RICH Hugo Site">
   <meta property="og:description" content="import torch import torch.nn as nn import torch.nn.functional as F import math class GemmaConfig: def __init__(self, width, depth, mlp_dim, num_heads, num_kv_heads, head_dim): self.width = width # 隐藏层维度hidden_dim self.depth = depth # 层数 self.mlp_dim = mlp_dim # MLP 中间层维度 self.num_heads = num_heads # Query 头数 self.num_kv_heads = num_kv_heads # Key/Value 头数 (Gemma 为 1, 即 MQA) self.head_dim = head_dim # 每个头的维度 class GemmaMLP(nn.Module): &#34;&#34;&#34;Gemma 使用的是类似 SwiGLU 的门控线性单元&#34;&#34;&#34; def __init__(self, config): super().__init__() # 这里的维度变化是：width -&gt; mlp_dim self.gate_proj = nn.Linear(config.width, config.mlp_dim, bias=False) self.up_proj = nn.Linear(config.width, config.mlp_dim, bias=False) self.down_proj = nn.Linear(config.mlp_dim, config.width, bias=False) def forward(self, x): # SwiGLU 激活机制 return self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x)) class GemmaAttention(nn.Module): &#34;&#34;&#34;Multi-Query Attention (MQA) 实现&#34;&#34;&#34; def __init__(self, config): super().__init__() self.num_heads = config.num_heads self.num_kv_heads = config.num_kv_heads self.head_dim = config.head_dim # Q 向量有多个头，但 K 和 V 只有 1 个头 (MQA 特性) self.q_proj = nn.Linear(config.width, self.num_heads * self.head_dim, bias=False) self.k_proj = nn.Linear(config.width, self.num_kv_heads * self.head_dim, bias=False) self.v_proj = nn.Linear(config.width, self.num_kv_heads * self.head_dim, bias=False) self.o_proj = nn.Linear(self.num_heads * self.head_dim, config.width, bias=False) def forward(self, x): # 此处省略了复杂的 RoPE 旋转和 Scaled Dot-Product 计算 # 逻辑：QKV 投影 -&gt; 多头拆分 -&gt; 注意力计算 -&gt; 合并输出 q = self.q_proj(x) k = self.k_proj(x) v = self.v_proj(x) return self.o_proj(q) # 简化示意 class GemmaBlock(nn.Module): &#34;&#34;&#34;单个 Transformer 层&#34;&#34;&#34; def __init__(self, config): super().__init__() self.attn = GemmaAttention(config) self.mlp = GemmaMLP(config) self.input_layernorm = nn.LayerNorm(config.width) # 实际 Gemma 使用 RMSNorm self.post_attention_layernorm = nn.LayerNorm(config.width) def forward(self, x): # 残差结构 x = x &#43; self.attn(self.input_layernorm(x)) x = x &#43; self.mlp(self.post_attention_layernorm(x)) return x # --- 2. 实例化并统计参数 --- def count_parameters(model): return sum(p.numel() for p in model.parameters() if p.requires_grad) # 定义配置 gemma_2b_cfg = GemmaConfig(2048, 18, 16384, 8, 1, 256) gemma_300m_cfg = GemmaConfig(1024, 18, 4096, 8, 1, 256) # 实例化单层 block_2b = GemmaBlock(gemma_2b_cfg) block_300m = GemmaBlock(gemma_300m_cfg) print(f&#34;Gemma 2B 单层参数量: {count_parameters(block_2b) / 1e6:.2f} M&#34;) print(f&#34;Gemma 300M 单层参数量: {count_parameters(block_300m) / 1e6:.2f} M&#34;)">
@@ -131,11 +136,8 @@ print(f&#34;Gemma 300M 单层参数量: {count_parameters(block_300m) / 1e6:.2f}
   <meta name="twitter:title" content="VLA RICH Hugo Site">
   <meta name="twitter:description" content="import torch import torch.nn as nn import torch.nn.functional as F import math class GemmaConfig: def __init__(self, width, depth, mlp_dim, num_heads, num_kv_heads, head_dim): self.width = width # 隐藏层维度hidden_dim self.depth = depth # 层数 self.mlp_dim = mlp_dim # MLP 中间层维度 self.num_heads = num_heads # Query 头数 self.num_kv_heads = num_kv_heads # Key/Value 头数 (Gemma 为 1, 即 MQA) self.head_dim = head_dim # 每个头的维度 class GemmaMLP(nn.Module): &#34;&#34;&#34;Gemma 使用的是类似 SwiGLU 的门控线性单元&#34;&#34;&#34; def __init__(self, config): super().__init__() # 这里的维度变化是：width -&gt; mlp_dim self.gate_proj = nn.Linear(config.width, config.mlp_dim, bias=False) self.up_proj = nn.Linear(config.width, config.mlp_dim, bias=False) self.down_proj = nn.Linear(config.mlp_dim, config.width, bias=False) def forward(self, x): # SwiGLU 激活机制 return self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x)) class GemmaAttention(nn.Module): &#34;&#34;&#34;Multi-Query Attention (MQA) 实现&#34;&#34;&#34; def __init__(self, config): super().__init__() self.num_heads = config.num_heads self.num_kv_heads = config.num_kv_heads self.head_dim = config.head_dim # Q 向量有多个头，但 K 和 V 只有 1 个头 (MQA 特性) self.q_proj = nn.Linear(config.width, self.num_heads * self.head_dim, bias=False) self.k_proj = nn.Linear(config.width, self.num_kv_heads * self.head_dim, bias=False) self.v_proj = nn.Linear(config.width, self.num_kv_heads * self.head_dim, bias=False) self.o_proj = nn.Linear(self.num_heads * self.head_dim, config.width, bias=False) def forward(self, x): # 此处省略了复杂的 RoPE 旋转和 Scaled Dot-Product 计算 # 逻辑：QKV 投影 -&gt; 多头拆分 -&gt; 注意力计算 -&gt; 合并输出 q = self.q_proj(x) k = self.k_proj(x) v = self.v_proj(x) return self.o_proj(q) # 简化示意 class GemmaBlock(nn.Module): &#34;&#34;&#34;单个 Transformer 层&#34;&#34;&#34; def __init__(self, config): super().__init__() self.attn = GemmaAttention(config) self.mlp = GemmaMLP(config) self.input_layernorm = nn.LayerNorm(config.width) # 实际 Gemma 使用 RMSNorm self.post_attention_layernorm = nn.LayerNorm(config.width) def forward(self, x): # 残差结构 x = x &#43; self.attn(self.input_layernorm(x)) x = x &#43; self.mlp(self.post_attention_layernorm(x)) return x # --- 2. 实例化并统计参数 --- def count_parameters(model): return sum(p.numel() for p in model.parameters() if p.requires_grad) # 定义配置 gemma_2b_cfg = GemmaConfig(2048, 18, 16384, 8, 1, 256) gemma_300m_cfg = GemmaConfig(1024, 18, 4096, 8, 1, 256) # 实例化单层 block_2b = GemmaBlock(gemma_2b_cfg) block_300m = GemmaBlock(gemma_300m_cfg) print(f&#34;Gemma 2B 单层参数量: {count_parameters(block_2b) / 1e6:.2f} M&#34;) print(f&#34;Gemma 300M 单层参数量: {count_parameters(block_300m) / 1e6:.2f} M&#34;)">
 
-      
-      
-    
 	
-  </head><body class="ma0 avenir bg-near-white production is-page is-page page-gemma_decoder">
+  </head><body class="ma0 avenir bg-near-white development is-page is-page page-gemma_decoder">
     
    
   
@@ -176,10 +178,18 @@ print(f&#34;Gemma 300M 单层参数量: {count_parameters(block_300m) / 1e6:.2f}
       </aside><div id="sharing" class="mt3 ananke-socials"></div>
 <h1 class="f1 athelas mt3 mb1"></h1>
       
+      <p class="tracked"><strong>Your Name</strong>
+      </p>
+      
       
       
 
       
+      
+        
+        
+        <span class="f6 mv4 dib tracked"> - 2 minutes read </span>
+        <span class="f6 mv4 dib tracked"> - 287 words </span>
       
     </header>
     <div class="nested-copy-line-height lh-copy serif f4 nested-links mid-gray pr4-l w-100-l"><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">import</span> torch
@@ -271,7 +281,7 @@ print(f&#34;Gemma 300M 单层参数量: {count_parameters(block_300m) / 1e6:.2f}
     </main>
     <footer class="bg-black bottom-0 w-100 pa3" role="contentinfo">
   <div class="flex justify-between">
-  <a class="f4 fw4 hover-white white-70 dn dib-ns pv2 ph3 no-underline" href="https://jiangyigithub.github.io/vlarich.github.io/" >
+  <a class="f4 fw4 hover-white white-70 dn dib-ns pv2 ph3 no-underline" href="http://localhost:1313/vlarich.github.io/" >
     &copy;  VLA RICH Hugo Site 2026 
   </a>
     <div><div class="ananke-socials"></div>
