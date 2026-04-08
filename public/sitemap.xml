@@ -2,9 +2,41 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
+    <loc>https://example.org/posts/dpo/</loc>
+  </url><url>
+    <loc>https://example.org/posts/flow_matching/</loc>
+  </url><url>
+    <loc>https://example.org/posts/gemma_decoder/</loc>
+  </url><url>
+    <loc>https://example.org/posts/gemma_moe_attn/</loc>
+  </url><url>
+    <loc>https://example.org/posts/gemma_transformer/</loc>
+  </url><url>
+    <loc>https://example.org/posts/gqa/</loc>
+  </url><url>
+    <loc>https://example.org/posts/grpo/</loc>
+  </url><url>
+    <loc>https://example.org/posts/kacache_attn/</loc>
+  </url><url>
+    <loc>https://example.org/posts/kvcache/</loc>
+  </url><url>
+    <loc>https://example.org/posts/lora/</loc>
+  </url><url>
+    <loc>https://example.org/posts/mha/</loc>
+  </url><url>
+    <loc>https://example.org/posts/mqa/</loc>
+  </url><url>
+    <loc>https://example.org/posts/one_decoder_layer/</loc>
+  </url><url>
+    <loc>https://example.org/posts/ppo/</loc>
+  </url><url>
+    <loc>https://example.org/posts/rope/</loc>
+  </url><url>
     <loc>https://example.org/categories/</loc>
   </url><url>
     <loc>https://example.org/</loc>
+  </url><url>
+    <loc>https://example.org/posts/</loc>
   </url><url>
     <loc>https://example.org/tags/</loc>
   </url>
