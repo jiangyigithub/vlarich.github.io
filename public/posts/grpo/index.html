@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en-us" dir="ltr">
-    <head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script><meta charset='utf-8'>
+    <head><meta charset='utf-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="import torch class GRPO: def __init__(self,eps,clip,beta): self.eps =eps self.clip = clip self.beta = beta def mask_mean(self,loss,mask,dim=-1): return (loss*mask).sum(dim=dim)/mask.sum(dim=dim) # 点乘 和 tensor 按维度求和 def group_advantages(self,rewards): mean=torch.mean(rewards) std = torch.std(rewards,unbiased=False)# unbiased=False， 真实这组数的尺度，而不是总体估计 advantages = (rewards-mean)/(std+self.eps) return advantages.detach()# 梯度截断 def grpo_loss(self,old_logps, new_logps,ref_logps,advantages): ref_logr = new_logps - ref_logps # logr kl_score = (torch.exp(ref_logr)-ref_logr-1)*self.beta # KL penalty: e^logr-logr-1 ratio = torch.exp(new_logps - old_logps) # r exp 的作用: 把“对数概率差”还原成“概率的比例” surr1 = ratio*advantages # r*A surr2 = torch.clamp(ratio,1-self.clip,1+self.clip)*advantages # clip(r)*A loss = - torch.mean(torch.min(surr1,surr2)-kl_score) # 最大化, return loss # loss ">
 <title>My New Hugo Site</title>
 
 
-<link rel="canonical" href="http://localhost:1313/posts/grpo/">
+<link rel="canonical" href="https://example.org/posts/grpo/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap">
@@ -14,7 +14,7 @@
 
 <link rel="stylesheet" href="/scss/style.min.389e156f5e9bb13df5a924cfa99dfb9c39f3e01e68d9e146cd65bdae963be145.css"><meta property='og:title' content="My New Hugo Site">
 <meta property='og:description' content="import torch class GRPO: def __init__(self,eps,clip,beta): self.eps =eps self.clip = clip self.beta = beta def mask_mean(self,loss,mask,dim=-1): return (loss*mask).sum(dim=dim)/mask.sum(dim=dim) # 点乘 和 tensor 按维度求和 def group_advantages(self,rewards): mean=torch.mean(rewards) std = torch.std(rewards,unbiased=False)# unbiased=False， 真实这组数的尺度，而不是总体估计 advantages = (rewards-mean)/(std+self.eps) return advantages.detach()# 梯度截断 def grpo_loss(self,old_logps, new_logps,ref_logps,advantages): ref_logr = new_logps - ref_logps # logr kl_score = (torch.exp(ref_logr)-ref_logr-1)*self.beta # KL penalty: e^logr-logr-1 ratio = torch.exp(new_logps - old_logps) # r exp 的作用: 把“对数概率差”还原成“概率的比例” surr1 = ratio*advantages # r*A surr2 = torch.clamp(ratio,1-self.clip,1+self.clip)*advantages # clip(r)*A loss = - torch.mean(torch.min(surr1,surr2)-kl_score) # 最大化, return loss # loss ">
-<meta property='og:url' content='http://localhost:1313/posts/grpo/'>
+<meta property='og:url' content='https://example.org/posts/grpo/'>
 <meta property='og:site_name' content='My New Hugo Site'>
 <meta property='og:type' content='article'><meta property='article:section' content='Posts' />
 <meta name="twitter:title" content="My New Hugo Site">
@@ -269,7 +269,7 @@
             </main>
         </div>
         
-<script type="text/javascript" src="/ts/main.3686cf1f5921e7acff374f8b7c54eebe84f8c39c75e03f58c84c6797bd846028.js" defer></script>
+<script type="text/javascript" src="/ts/main.acaf849f2b273f6a8368a58b001f336738d0c948d92e79b116467d0c7515f932.js" defer></script>
 
 
     </body>

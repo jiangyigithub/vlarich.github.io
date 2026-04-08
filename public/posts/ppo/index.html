@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en-us" dir="ltr">
-    <head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script><meta charset='utf-8'>
+    <head><meta charset='utf-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="import torch from torch import nn from torch.nn import functional as F class PPO: def __init__(self,clip,gamma=0.99,lam=0.95): self.clip = clip self.gamma = gamma self.lam = lam def mask_mean(self,loss,mask,dim=-1): return (loss*mask).sum(dim=dim)/mask.sum(dim=dim) def advantage_estimate(self,rewards,values): seq_len = values.shape[1] # [batch_size, seq_len] advantages = torch.zeros_like(rewards) gae=0 for i in range(seq_len-1,-1,-1): next_value = values[:,i+1] if i&lt;seq_len-1 else 0.0 # rewards[:,i] 对应 r_t # next_value 对应 V(s_{t+1}) # values[:,i] 对应 V(s_t) delta = rewards[:,i]+self.gamma*next_value-values[:,i] # TD error = r_t + V(s_{t+1}) - V(s_t) gae = delta+self.lam*self.gamma*gae # A_t\u200b=δt\u200b+γλ*A_t+1\u200b advantages[:,i]=gae # 给 batch 中所有 sequence 的第 i 个 token 赋 advantage returns =advantages+values # Target Value Q(s,a)=A(s,a)+V(s) return advantages,returns def policy_loss(self,new_probs,old_probs,advantages,act_mask): ratio = torch.exp(new_probs-old_probs) surr1=ratio*advantages surr2=torch.clamp(ratio,1-self.clip,1+self.clip)*advantages loss=-torch.min(surr1,surr2) return self.mask_mean(loss,act_mask) # act_mask 是 action mask（动作mask） def value_loss(self,new_values,returns,act_mask): loss = (new_values-returns)**2 # 更新预期 return self.mask_mean(loss,act_mask) ">
 <title>My New Hugo Site</title>
 
 
-<link rel="canonical" href="http://localhost:1313/posts/ppo/">
+<link rel="canonical" href="https://example.org/posts/ppo/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap">
@@ -14,7 +14,7 @@
 
 <link rel="stylesheet" href="/scss/style.min.389e156f5e9bb13df5a924cfa99dfb9c39f3e01e68d9e146cd65bdae963be145.css"><meta property='og:title' content="My New Hugo Site">
 <meta property='og:description' content="import torch from torch import nn from torch.nn import functional as F class PPO: def __init__(self,clip,gamma=0.99,lam=0.95): self.clip = clip self.gamma = gamma self.lam = lam def mask_mean(self,loss,mask,dim=-1): return (loss*mask).sum(dim=dim)/mask.sum(dim=dim) def advantage_estimate(self,rewards,values): seq_len = values.shape[1] # [batch_size, seq_len] advantages = torch.zeros_like(rewards) gae=0 for i in range(seq_len-1,-1,-1): next_value = values[:,i+1] if i&lt;seq_len-1 else 0.0 # rewards[:,i] 对应 r_t # next_value 对应 V(s_{t+1}) # values[:,i] 对应 V(s_t) delta = rewards[:,i]+self.gamma*next_value-values[:,i] # TD error = r_t + V(s_{t+1}) - V(s_t) gae = delta+self.lam*self.gamma*gae # A_t\u200b=δt\u200b+γλ*A_t+1\u200b advantages[:,i]=gae # 给 batch 中所有 sequence 的第 i 个 token 赋 advantage returns =advantages+values # Target Value Q(s,a)=A(s,a)+V(s) return advantages,returns def policy_loss(self,new_probs,old_probs,advantages,act_mask): ratio = torch.exp(new_probs-old_probs) surr1=ratio*advantages surr2=torch.clamp(ratio,1-self.clip,1+self.clip)*advantages loss=-torch.min(surr1,surr2) return self.mask_mean(loss,act_mask) # act_mask 是 action mask（动作mask） def value_loss(self,new_values,returns,act_mask): loss = (new_values-returns)**2 # 更新预期 return self.mask_mean(loss,act_mask) ">
-<meta property='og:url' content='http://localhost:1313/posts/ppo/'>
+<meta property='og:url' content='https://example.org/posts/ppo/'>
 <meta property='og:site_name' content='My New Hugo Site'>
 <meta property='og:type' content='article'><meta property='article:section' content='Posts' />
 <meta name="twitter:title" content="My New Hugo Site">
@@ -280,7 +280,7 @@
             </main>
         </div>
         
-<script type="text/javascript" src="/ts/main.3686cf1f5921e7acff374f8b7c54eebe84f8c39c75e03f58c84c6797bd846028.js" defer></script>
+<script type="text/javascript" src="/ts/main.acaf849f2b273f6a8368a58b001f336738d0c948d92e79b116467d0c7515f932.js" defer></script>
 
 
     </body>

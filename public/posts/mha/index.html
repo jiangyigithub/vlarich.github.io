@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en-us" dir="ltr">
-    <head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script><meta charset='utf-8'>
+    <head><meta charset='utf-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="MultiHeadSelfAttention\rimport torch import torch.nn as nn import math class MultiHeadSelfAttention(nn.Module): def __init__(self,nums_head=8,hidden_dim=512): super().__init__() self.hidden_dim = hidden_dim self.nums_head = nums_head self.head_dim = hidden_dim//nums_head self.q_proj = nn.Linear(hidden_dim,hidden_dim) self.k_proj = nn.Linear(hidden_dim,hidden_dim) self.v_proj = nn.Linear(hidden_dim,hidden_dim) self.o_proj = nn.Linear(hidden_dim,hidden_dim) self.dropout=nn.Dropout(0.1) def forward(self,x,attn_mask=None): batch_size,seq_len,self.hidden_dim = x.size() q=self.q_proj(x) k=self.k_proj(x) v=self.v_proj(x) # split q_state = q.view(batch_size,seq_len,self.nums_head,self.head_dim).transpose(1,2) k_state = k.view(batch_size,seq_len,self.nums_head,self.head_dim).transpose(1,2) v_state = v.view(batch_size,seq_len,self.nums_head,self.head_dim).transpose(1,2) # q@k^t/sqrt(d) attn_score = q_state@k_state.transpose(-1,-2)/math.sqrt(self.head_dim) if attn_mask is not None: attn_score = attn_score.masked_fill(attn_mask ==0,-1e9) attn_weight = torch.softmax(attn_score,dim=-1) attn_weight = self.dropout(attn_weight) output_mid = attn_weight@v_state # concat output_mid = output_mid.transpose(-1,-2).contiguous() output_mid = output_mid.view(batch_size,seq_len,-1) output= self.o_proj(output_mid) return output x= torch.rand(3,2,512) attn_mask = torch.tensor([ [0,1], [0,0], [1,0], ]).unsqueeze(1).unsqueeze(2).expand(3,8,2,2) net = MultiHeadSelfAttention(8,512) net(x,attn_mask).shape ">
 <title>My New Hugo Site</title>
 
 
-<link rel="canonical" href="http://localhost:1313/posts/mha/">
+<link rel="canonical" href="https://example.org/posts/mha/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap">
@@ -14,7 +14,7 @@
 
 <link rel="stylesheet" href="/scss/style.min.389e156f5e9bb13df5a924cfa99dfb9c39f3e01e68d9e146cd65bdae963be145.css"><meta property='og:title' content="My New Hugo Site">
 <meta property='og:description' content="MultiHeadSelfAttention\rimport torch import torch.nn as nn import math class MultiHeadSelfAttention(nn.Module): def __init__(self,nums_head=8,hidden_dim=512): super().__init__() self.hidden_dim = hidden_dim self.nums_head = nums_head self.head_dim = hidden_dim//nums_head self.q_proj = nn.Linear(hidden_dim,hidden_dim) self.k_proj = nn.Linear(hidden_dim,hidden_dim) self.v_proj = nn.Linear(hidden_dim,hidden_dim) self.o_proj = nn.Linear(hidden_dim,hidden_dim) self.dropout=nn.Dropout(0.1) def forward(self,x,attn_mask=None): batch_size,seq_len,self.hidden_dim = x.size() q=self.q_proj(x) k=self.k_proj(x) v=self.v_proj(x) # split q_state = q.view(batch_size,seq_len,self.nums_head,self.head_dim).transpose(1,2) k_state = k.view(batch_size,seq_len,self.nums_head,self.head_dim).transpose(1,2) v_state = v.view(batch_size,seq_len,self.nums_head,self.head_dim).transpose(1,2) # q@k^t/sqrt(d) attn_score = q_state@k_state.transpose(-1,-2)/math.sqrt(self.head_dim) if attn_mask is not None: attn_score = attn_score.masked_fill(attn_mask ==0,-1e9) attn_weight = torch.softmax(attn_score,dim=-1) attn_weight = self.dropout(attn_weight) output_mid = attn_weight@v_state # concat output_mid = output_mid.transpose(-1,-2).contiguous() output_mid = output_mid.view(batch_size,seq_len,-1) output= self.o_proj(output_mid) return output x= torch.rand(3,2,512) attn_mask = torch.tensor([ [0,1], [0,0], [1,0], ]).unsqueeze(1).unsqueeze(2).expand(3,8,2,2) net = MultiHeadSelfAttention(8,512) net(x,attn_mask).shape ">
-<meta property='og:url' content='http://localhost:1313/posts/mha/'>
+<meta property='og:url' content='https://example.org/posts/mha/'>
 <meta property='og:site_name' content='My New Hugo Site'>
 <meta property='og:type' content='article'><meta property='article:section' content='Posts' />
 <meta name="twitter:title" content="My New Hugo Site">
@@ -293,7 +293,7 @@
             </main>
         </div>
         
-<script type="text/javascript" src="/ts/main.3686cf1f5921e7acff374f8b7c54eebe84f8c39c75e03f58c84c6797bd846028.js" defer></script>
+<script type="text/javascript" src="/ts/main.acaf849f2b273f6a8368a58b001f336738d0c948d92e79b116467d0c7515f932.js" defer></script>
 
 
     </body>

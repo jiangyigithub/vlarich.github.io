@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en-us" dir="ltr">
-    <head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script><meta charset='utf-8'>
+    <head><meta charset='utf-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="class GemmaModel(nn.Module): def __init__(self, config): super().__init__() self.config = config # 1. 词嵌入层 (Embedding) # Gemma 的词表很大 (256,000)，这部分参数量占比很高 self.embed_tokens = nn.Embedding(256000, config.width) # 2. 堆叠 18 层 Transformer Blocks self.layers = nn.ModuleList([ GemmaBlock(config) for _ in range(config.depth) ]) # 3. 最终归一化 self.final_norm = nn.LayerNorm(config.width) # 4. 输出层 (LM Head) # 实际上 Gemma 使用 self.embed_tokens.weight 作为投影权重 self.lm_head = nn.Linear(config.width, 256000, bias=False) def forward(self, input_ids): # input_ids shape: [batch_size, seq_len] x = self.embed_tokens(input_ids) # 逐层通过 Transformer for layer in self.layers: x = layer(x) x = self.final_norm(x) logits = self.lm_head(x) return logits # --- 实例化并计算总参数量 --- model_2b = GemmaModel(gemma_2b_cfg) model_300m = GemmaModel(gemma_300m_cfg) def total_params(model): return sum(p.numel() for p in model.parameters()) / 1e6 print(f&#34;Gemma 2B 完整网络参数量: {total_params(model_2b):.2f} M (约 2.5B)&#34;) print(f&#34;Gemma 300M 完整网络参数量: {total_params(model_300m):.2f} M (约 0.5B)&#34;) ">
 <title>My New Hugo Site</title>
 
 
-<link rel="canonical" href="http://localhost:1313/posts/gemma_transformer/">
+<link rel="canonical" href="https://example.org/posts/gemma_transformer/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap">
@@ -14,7 +14,7 @@
 
 <link rel="stylesheet" href="/scss/style.min.389e156f5e9bb13df5a924cfa99dfb9c39f3e01e68d9e146cd65bdae963be145.css"><meta property='og:title' content="My New Hugo Site">
 <meta property='og:description' content="class GemmaModel(nn.Module): def __init__(self, config): super().__init__() self.config = config # 1. 词嵌入层 (Embedding) # Gemma 的词表很大 (256,000)，这部分参数量占比很高 self.embed_tokens = nn.Embedding(256000, config.width) # 2. 堆叠 18 层 Transformer Blocks self.layers = nn.ModuleList([ GemmaBlock(config) for _ in range(config.depth) ]) # 3. 最终归一化 self.final_norm = nn.LayerNorm(config.width) # 4. 输出层 (LM Head) # 实际上 Gemma 使用 self.embed_tokens.weight 作为投影权重 self.lm_head = nn.Linear(config.width, 256000, bias=False) def forward(self, input_ids): # input_ids shape: [batch_size, seq_len] x = self.embed_tokens(input_ids) # 逐层通过 Transformer for layer in self.layers: x = layer(x) x = self.final_norm(x) logits = self.lm_head(x) return logits # --- 实例化并计算总参数量 --- model_2b = GemmaModel(gemma_2b_cfg) model_300m = GemmaModel(gemma_300m_cfg) def total_params(model): return sum(p.numel() for p in model.parameters()) / 1e6 print(f&#34;Gemma 2B 完整网络参数量: {total_params(model_2b):.2f} M (约 2.5B)&#34;) print(f&#34;Gemma 300M 完整网络参数量: {total_params(model_300m):.2f} M (约 0.5B)&#34;) ">
-<meta property='og:url' content='http://localhost:1313/posts/gemma_transformer/'>
+<meta property='og:url' content='https://example.org/posts/gemma_transformer/'>
 <meta property='og:site_name' content='My New Hugo Site'>
 <meta property='og:type' content='article'><meta property='article:section' content='Posts' />
 <meta name="twitter:title" content="My New Hugo Site">
@@ -285,7 +285,7 @@
             </main>
         </div>
         
-<script type="text/javascript" src="/ts/main.3686cf1f5921e7acff374f8b7c54eebe84f8c39c75e03f58c84c6797bd846028.js" defer></script>
+<script type="text/javascript" src="/ts/main.acaf849f2b273f6a8368a58b001f336738d0c948d92e79b116467d0c7515f932.js" defer></script>
 
 
     </body>
