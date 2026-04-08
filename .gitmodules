@@ -5,5 +5,5 @@
 	path = themes/hugo-theme-den
 	url = https://github.com/iswbm/hugo-theme-den.git
 [submodule "themes/gohugo-theme-ananke"]
-	path = gohugo-theme-ananke
+	path = themes/gohugo-theme-ananke
 	url = https://github.com/theNewDynamic/gohugo-theme-ananke.git
