@@ -2,42 +2,42 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
-    <loc>https://example.org/posts/dpo/</loc>
+    <loc>http://localhost:1313/posts/dpo/</loc>
   </url><url>
-    <loc>https://example.org/posts/flow_matching/</loc>
+    <loc>http://localhost:1313/posts/flow_matching/</loc>
   </url><url>
-    <loc>https://example.org/posts/gemma_decoder/</loc>
+    <loc>http://localhost:1313/posts/gemma_decoder/</loc>
   </url><url>
-    <loc>https://example.org/posts/gemma_moe_attn/</loc>
+    <loc>http://localhost:1313/posts/gemma_moe_attn/</loc>
   </url><url>
-    <loc>https://example.org/posts/gemma_transformer/</loc>
+    <loc>http://localhost:1313/posts/gemma_transformer/</loc>
   </url><url>
-    <loc>https://example.org/posts/gqa/</loc>
+    <loc>http://localhost:1313/posts/gqa/</loc>
   </url><url>
-    <loc>https://example.org/posts/grpo/</loc>
+    <loc>http://localhost:1313/posts/grpo/</loc>
   </url><url>
-    <loc>https://example.org/posts/kacache_attn/</loc>
+    <loc>http://localhost:1313/posts/kacache_attn/</loc>
   </url><url>
-    <loc>https://example.org/posts/kvcache/</loc>
+    <loc>http://localhost:1313/posts/kvcache/</loc>
   </url><url>
-    <loc>https://example.org/posts/lora/</loc>
+    <loc>http://localhost:1313/posts/lora/</loc>
   </url><url>
-    <loc>https://example.org/posts/mha/</loc>
+    <loc>http://localhost:1313/posts/mha/</loc>
   </url><url>
-    <loc>https://example.org/posts/mqa/</loc>
+    <loc>http://localhost:1313/posts/mqa/</loc>
   </url><url>
-    <loc>https://example.org/posts/one_decoder_layer/</loc>
+    <loc>http://localhost:1313/posts/one_decoder_layer/</loc>
   </url><url>
-    <loc>https://example.org/posts/ppo/</loc>
+    <loc>http://localhost:1313/posts/ppo/</loc>
   </url><url>
-    <loc>https://example.org/posts/rope/</loc>
+    <loc>http://localhost:1313/posts/rope/</loc>
   </url><url>
-    <loc>https://example.org/categories/</loc>
+    <loc>http://localhost:1313/categories/</loc>
   </url><url>
-    <loc>https://example.org/</loc>
+    <loc>http://localhost:1313/</loc>
   </url><url>
-    <loc>https://example.org/posts/</loc>
+    <loc>http://localhost:1313/posts/</loc>
   </url><url>
-    <loc>https://example.org/tags/</loc>
+    <loc>http://localhost:1313/tags/</loc>
   </url>
 </urlset>

@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="import torch import torch.nn as nn import torch.nn.functional as F import math from typing import Optional, Tuple class KVCacheSelfAttention(nn.Module): &#34;&#34;&#34; 带KV缓存的自注意力模块 支持增量推理，适用于生成式模型 &#34;&#34;&#34; def __init__( self, dim: int, num_heads: int, max_seq_len: int = 2048, dropout: float = 0.0, bias: bool = True, flash_attention: bool = False ): super().__init__() self.dim = dim self.num_heads = num_heads self.head_dim = dim // num_heads self.dropout = dropout self.max_seq_len = max_seq_len self.flash_attention = flash_attention # 检查维度是否能被头数整除 assert self.head_dim * num_heads == dim, &#34;dim必须能被num_heads整除&#34; # 投影层 self.q_proj = nn.Linear(dim, dim, bias=bias) self.k_proj = nn.Linear(dim, dim, bias=bias) self.v_proj = nn.Linear(dim, dim, bias=bias) self.out_proj = nn.Linear(dim, dim, bias=bias) # dropout层 self.attn_dropout = nn.Dropout(dropout) self.resid_dropout = nn.Dropout(dropout) # 缩放因子 self.scale = 1.0 / math.sqrt(self.head_dim) def forward( self, x: torch.Tensor, kv_cache: Optional[Tuple[torch.Tensor, torch.Tensor]] = None, attention_mask: Optional[torch.Tensor] = None, use_cache: bool = False, is_causal: bool = True, past_key_values: Optional[Tuple[torch.Tensor, torch.Tensor]] = None ) -&gt; Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]: &#34;&#34;&#34; 前向传播 参数: x: 输入张量 [batch_size, seq_len, dim] kv_cache: 之前的KV缓存 (key, value) attention_mask: 注意力掩码 use_cache: 是否返回KV缓存 is_causal: 是否使用因果注意力掩码 past_key_values: 之前的键值对（用于兼容一些API） 返回: output: 输出张量 [batch_size, seq_len, dim] kv_cache: 更新后的KV缓存 (key, value) &#34;&#34;&#34; batch_size, seq_len, _ = x.shape # 如果提供了past_key_values，转换为kv_cache格式 if past_key_values is not None and kv_cache is None: kv_cache = past_key_values # 计算Q, K, V q = self.q_proj(x) # [batch_size, seq_len, dim] k = self.k_proj(x) # [batch_size, seq_len, dim] v = self.v_proj(x) # [batch_size, seq_len, dim] # 重塑为多头格式 q = q.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2) k = k.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2) v = v.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2) # 如果使用KV缓存，拼接之前的K和V if kv_cache is not None: k_cache, v_cache = kv_cache # k_cache: [batch_size, num_heads, cache_seq_len, head_dim] # v_cache: [batch_size, num_heads, cache_seq_len, head_dim] k = torch.cat([k_cache, k], dim=2) v = torch.cat([v_cache, v], dim=2) # 准备返回的缓存 new_kv_cache = (k, v) if use_cache else None # 计算注意力分数 if self.flash_attention and torch.cuda.is_available() and is_causal: # 使用Flash Attention（如果可用） output = self._flash_attention(q, k, v, attention_mask, is_causal) else: # 标准注意力实现 output = self._standard_attention(q, k, v, attention_mask, is_causal) # 重塑输出 output = output.transpose(1, 2).contiguous().view(batch_size, seq_len, self.dim) # 输出投影和dropout output = self.out_proj(output) output = self.resid_dropout(output) return output, new_kv_cache def _standard_attention( self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, attention_mask: Optional[torch.Tensor], is_causal: bool ) -&gt; torch.Tensor: &#34;&#34;&#34;标准注意力实现&#34;&#34;&#34; batch_size, num_heads, q_seq_len, head_dim = q.shape _, _, k_seq_len, _ = k.shape # 计算注意力分数 attn_scores = torch.matmul(q, k.transpose(-2, -1)) * self.scale # 应用因果掩码（如果需要） if is_causal and attention_mask is None: # 创建因果掩码 causal_mask = torch.tril( torch.ones((q_seq_len, k_seq_len), dtype=torch.bool, device=q.device) ) causal_mask = causal_mask.view(1, 1, q_seq_len, k_seq_len) attn_scores = attn_scores.masked_fill(~causal_mask, float(&#39;-inf&#39;)) # 应用外部提供的注意力掩码 if attention_mask is not None: # attention_mask: [batch_size, 1, q_seq_len, k_seq_len] 或 [batch_size, q_seq_len, k_seq_len] if attention_mask.dim() == 3: attention_mask = attention_mask.unsqueeze(1) attn_scores = attn_scores + attention_mask # 应用softmax attn_probs = F.softmax(attn_scores, dim=-1) attn_probs = self.attn_dropout(attn_probs) # 计算输出 output = torch.matmul(attn_probs, v) return output def _flash_attention( self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, attention_mask: Optional[torch.Tensor], is_causal: bool ) -&gt; torch.Tensor: &#34;&#34;&#34;Flash Attention实现（需要PyTorch 2.0+）&#34;&#34;&#34; try: import torch.nn.functional as F # 使用scaled_dot_product_attention output = F.scaled_dot_product_attention( q, k, v, attn_mask=attention_mask, dropout_p=self.dropout if self.training else 0.0, is_causal=is_causal ) return output except ImportError: # 如果Flash Attention不可用，回退到标准注意力 return self._standard_attention(q, k, v, attention_mask, is_causal) class KVCacheManager: &#34;&#34;&#34; KV缓存管理器，用于管理多个层的KV缓存 &#34;&#34;&#34; def __init__(self, num_layers: int): self.num_layers = num_layers self.cache = [None] * num_layers def init_cache(self, batch_size: int, max_length: int, device: torch.device): &#34;&#34;&#34;初始化缓存&#34;&#34;&#34; self.cache = [None] * self.num_layers def update_cache(self, layer_idx: int, new_cache: Tuple[torch.Tensor, torch.Tensor]): &#34;&#34;&#34;更新指定层的缓存&#34;&#34;&#34; self.cache[layer_idx] = new_cache def get_cache(self, layer_idx: int) -&gt; Optional[Tuple[torch.Tensor, torch.Tensor]]: &#34;&#34;&#34;获取指定层的缓存&#34;&#34;&#34; if layer_idx &lt; len(self.cache): return self.cache[layer_idx] return None def clear_cache(self): &#34;&#34;&#34;清空所有缓存&#34;&#34;&#34; self.cache = [None] * self.num_layers # 使用示例 def example_usage(): # 配置参数 batch_size = 2 seq_len = 10 dim = 512 num_heads = 8 num_layers = 6 # 创建模型 attn_layer = KVCacheSelfAttention(dim=dim, num_heads=num_heads) cache_manager = KVCacheManager(num_layers=num_layers) # 模拟输入 x = torch.randn(batch_size, seq_len, dim) print(&#34;=== 第一次前向传播（无缓存）===&#34;) output1, kv_cache = attn_layer(x, use_cache=True) print(f&#34;输入形状: {x.shape}&#34;) print(f&#34;输出形状: {output1.shape}&#34;) print(f&#34;KV缓存形状: k={kv_cache[0].shape}, v={kv_cache[1].shape}&#34;) # 保存缓存 cache_manager.update_cache(0, kv_cache) print(&#34;\\n=== 第二次前向传播（有缓存，增量推理）===&#34;) # 模拟增量输入（通常是单个token） x_incremental = torch.randn(batch_size, 1, dim) # 获取之前的缓存 past_kv = cache_manager.get_cache(0) output2, new_kv_cache = attn_layer( x_incremental, kv_cache=past_kv, use_cache=True, is_causal=True ) print(f&#34;增量输入形状: {x_incremental.shape}&#34;) print(f&#34;增量输出形状: {output2.shape}&#34;) print(f&#34;新KV缓存形状: k={new_kv_cache[0].shape}, v={new_kv_cache[1].shape}&#34;) # 验证缓存是否正确拼接 print(f&#34;\\n=== 缓存验证 ===&#34;) print(f&#34;原始K形状: {past_kv[0].shape if past_kv else &#39;无&#39;}&#34;) print(f&#34;新增K形状: {x_incremental.shape}&#34;) print(f&#34;拼接后K形状: {new_kv_cache[0].shape}&#34;) print(f&#34;缓存序列长度增加: {new_kv_cache[0].shape[2] - (past_kv[0].shape[2] if past_kv else 0)}&#34;) # 测试函数 def test_kv_cache(): &#34;&#34;&#34;测试KV缓存功能&#34;&#34;&#34; torch.manual_seed(42) # 简单测试 dim = 64 num_heads = 4 batch_size = 1 seq_len1 = 5 seq_len2 = 3 attn = KVCacheSelfAttention(dim=dim, num_heads=num_heads) # 第一次前向传播 x1 = torch.randn(batch_size, seq_len1, dim) output1, kv_cache1 = attn(x1, use_cache=True) # 第二次前向传播（使用缓存） x2 = torch.randn(batch_size, seq_len2, dim) output2, kv_cache2 = attn(x2, kv_cache=kv_cache1, use_cache=True) # 一次性处理所有token（用于验证） x_all = torch.cat([x1, x2], dim=1) output_all, _ = attn(x_all, use_cache=False) # 检查结果是否一致 output2_from_all = output_all[:, seq_len1:, :] # 允许小的数值误差 tolerance = 1e-5 if torch.allclose(output2, output2_from_all, rtol=tolerance, atol=tolerance): print(&#34;✓ KV缓存测试通过：增量推理与一次性计算结果一致&#34;) return True else: print(&#34;✗ KV缓存测试失败：结果不一致&#34;) max_diff = torch.max(torch.abs(output2 - output2_from_all)) print(f&#34;最大差异: {max_diff.item()}&#34;) return False if __name__ == &#34;__main__&#34;: print(&#34;带KV缓存的自注意力实现&#34;) print(&#34;=&#34; * 50) # 运行测试 test_kv_cache() print(&#34;\\n&#34; + &#34;=&#34; * 50) print(&#34;使用示例：&#34;) example_usage() ">
+<title>My New Hugo Site</title>
+
+
+<link rel="canonical" href="http://localhost:1313/posts/kacache_attn/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap">
+
+
+<link rel="stylesheet" href="/scss/style.min.389e156f5e9bb13df5a924cfa99dfb9c39f3e01e68d9e146cd65bdae963be145.css"><meta property='og:title' content="My New Hugo Site">
+<meta property='og:description' content="import torch import torch.nn as nn import torch.nn.functional as F import math from typing import Optional, Tuple class KVCacheSelfAttention(nn.Module): &#34;&#34;&#34; 带KV缓存的自注意力模块 支持增量推理，适用于生成式模型 &#34;&#34;&#34; def __init__( self, dim: int, num_heads: int, max_seq_len: int = 2048, dropout: float = 0.0, bias: bool = True, flash_attention: bool = False ): super().__init__() self.dim = dim self.num_heads = num_heads self.head_dim = dim // num_heads self.dropout = dropout self.max_seq_len = max_seq_len self.flash_attention = flash_attention # 检查维度是否能被头数整除 assert self.head_dim * num_heads == dim, &#34;dim必须能被num_heads整除&#34; # 投影层 self.q_proj = nn.Linear(dim, dim, bias=bias) self.k_proj = nn.Linear(dim, dim, bias=bias) self.v_proj = nn.Linear(dim, dim, bias=bias) self.out_proj = nn.Linear(dim, dim, bias=bias) # dropout层 self.attn_dropout = nn.Dropout(dropout) self.resid_dropout = nn.Dropout(dropout) # 缩放因子 self.scale = 1.0 / math.sqrt(self.head_dim) def forward( self, x: torch.Tensor, kv_cache: Optional[Tuple[torch.Tensor, torch.Tensor]] = None, attention_mask: Optional[torch.Tensor] = None, use_cache: bool = False, is_causal: bool = True, past_key_values: Optional[Tuple[torch.Tensor, torch.Tensor]] = None ) -&gt; Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]: &#34;&#34;&#34; 前向传播 参数: x: 输入张量 [batch_size, seq_len, dim] kv_cache: 之前的KV缓存 (key, value) attention_mask: 注意力掩码 use_cache: 是否返回KV缓存 is_causal: 是否使用因果注意力掩码 past_key_values: 之前的键值对（用于兼容一些API） 返回: output: 输出张量 [batch_size, seq_len, dim] kv_cache: 更新后的KV缓存 (key, value) &#34;&#34;&#34; batch_size, seq_len, _ = x.shape # 如果提供了past_key_values，转换为kv_cache格式 if past_key_values is not None and kv_cache is None: kv_cache = past_key_values # 计算Q, K, V q = self.q_proj(x) # [batch_size, seq_len, dim] k = self.k_proj(x) # [batch_size, seq_len, dim] v = self.v_proj(x) # [batch_size, seq_len, dim] # 重塑为多头格式 q = q.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2) k = k.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2) v = v.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2) # 如果使用KV缓存，拼接之前的K和V if kv_cache is not None: k_cache, v_cache = kv_cache # k_cache: [batch_size, num_heads, cache_seq_len, head_dim] # v_cache: [batch_size, num_heads, cache_seq_len, head_dim] k = torch.cat([k_cache, k], dim=2) v = torch.cat([v_cache, v], dim=2) # 准备返回的缓存 new_kv_cache = (k, v) if use_cache else None # 计算注意力分数 if self.flash_attention and torch.cuda.is_available() and is_causal: # 使用Flash Attention（如果可用） output = self._flash_attention(q, k, v, attention_mask, is_causal) else: # 标准注意力实现 output = self._standard_attention(q, k, v, attention_mask, is_causal) # 重塑输出 output = output.transpose(1, 2).contiguous().view(batch_size, seq_len, self.dim) # 输出投影和dropout output = self.out_proj(output) output = self.resid_dropout(output) return output, new_kv_cache def _standard_attention( self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, attention_mask: Optional[torch.Tensor], is_causal: bool ) -&gt; torch.Tensor: &#34;&#34;&#34;标准注意力实现&#34;&#34;&#34; batch_size, num_heads, q_seq_len, head_dim = q.shape _, _, k_seq_len, _ = k.shape # 计算注意力分数 attn_scores = torch.matmul(q, k.transpose(-2, -1)) * self.scale # 应用因果掩码（如果需要） if is_causal and attention_mask is None: # 创建因果掩码 causal_mask = torch.tril( torch.ones((q_seq_len, k_seq_len), dtype=torch.bool, device=q.device) ) causal_mask = causal_mask.view(1, 1, q_seq_len, k_seq_len) attn_scores = attn_scores.masked_fill(~causal_mask, float(&#39;-inf&#39;)) # 应用外部提供的注意力掩码 if attention_mask is not None: # attention_mask: [batch_size, 1, q_seq_len, k_seq_len] 或 [batch_size, q_seq_len, k_seq_len] if attention_mask.dim() == 3: attention_mask = attention_mask.unsqueeze(1) attn_scores = attn_scores + attention_mask # 应用softmax attn_probs = F.softmax(attn_scores, dim=-1) attn_probs = self.attn_dropout(attn_probs) # 计算输出 output = torch.matmul(attn_probs, v) return output def _flash_attention( self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, attention_mask: Optional[torch.Tensor], is_causal: bool ) -&gt; torch.Tensor: &#34;&#34;&#34;Flash Attention实现（需要PyTorch 2.0+）&#34;&#34;&#34; try: import torch.nn.functional as F # 使用scaled_dot_product_attention output = F.scaled_dot_product_attention( q, k, v, attn_mask=attention_mask, dropout_p=self.dropout if self.training else 0.0, is_causal=is_causal ) return output except ImportError: # 如果Flash Attention不可用，回退到标准注意力 return self._standard_attention(q, k, v, attention_mask, is_causal) class KVCacheManager: &#34;&#34;&#34; KV缓存管理器，用于管理多个层的KV缓存 &#34;&#34;&#34; def __init__(self, num_layers: int): self.num_layers = num_layers self.cache = [None] * num_layers def init_cache(self, batch_size: int, max_length: int, device: torch.device): &#34;&#34;&#34;初始化缓存&#34;&#34;&#34; self.cache = [None] * self.num_layers def update_cache(self, layer_idx: int, new_cache: Tuple[torch.Tensor, torch.Tensor]): &#34;&#34;&#34;更新指定层的缓存&#34;&#34;&#34; self.cache[layer_idx] = new_cache def get_cache(self, layer_idx: int) -&gt; Optional[Tuple[torch.Tensor, torch.Tensor]]: &#34;&#34;&#34;获取指定层的缓存&#34;&#34;&#34; if layer_idx &lt; len(self.cache): return self.cache[layer_idx] return None def clear_cache(self): &#34;&#34;&#34;清空所有缓存&#34;&#34;&#34; self.cache = [None] * self.num_layers # 使用示例 def example_usage(): # 配置参数 batch_size = 2 seq_len = 10 dim = 512 num_heads = 8 num_layers = 6 # 创建模型 attn_layer = KVCacheSelfAttention(dim=dim, num_heads=num_heads) cache_manager = KVCacheManager(num_layers=num_layers) # 模拟输入 x = torch.randn(batch_size, seq_len, dim) print(&#34;=== 第一次前向传播（无缓存）===&#34;) output1, kv_cache = attn_layer(x, use_cache=True) print(f&#34;输入形状: {x.shape}&#34;) print(f&#34;输出形状: {output1.shape}&#34;) print(f&#34;KV缓存形状: k={kv_cache[0].shape}, v={kv_cache[1].shape}&#34;) # 保存缓存 cache_manager.update_cache(0, kv_cache) print(&#34;\\n=== 第二次前向传播（有缓存，增量推理）===&#34;) # 模拟增量输入（通常是单个token） x_incremental = torch.randn(batch_size, 1, dim) # 获取之前的缓存 past_kv = cache_manager.get_cache(0) output2, new_kv_cache = attn_layer( x_incremental, kv_cache=past_kv, use_cache=True, is_causal=True ) print(f&#34;增量输入形状: {x_incremental.shape}&#34;) print(f&#34;增量输出形状: {output2.shape}&#34;) print(f&#34;新KV缓存形状: k={new_kv_cache[0].shape}, v={new_kv_cache[1].shape}&#34;) # 验证缓存是否正确拼接 print(f&#34;\\n=== 缓存验证 ===&#34;) print(f&#34;原始K形状: {past_kv[0].shape if past_kv else &#39;无&#39;}&#34;) print(f&#34;新增K形状: {x_incremental.shape}&#34;) print(f&#34;拼接后K形状: {new_kv_cache[0].shape}&#34;) print(f&#34;缓存序列长度增加: {new_kv_cache[0].shape[2] - (past_kv[0].shape[2] if past_kv else 0)}&#34;) # 测试函数 def test_kv_cache(): &#34;&#34;&#34;测试KV缓存功能&#34;&#34;&#34; torch.manual_seed(42) # 简单测试 dim = 64 num_heads = 4 batch_size = 1 seq_len1 = 5 seq_len2 = 3 attn = KVCacheSelfAttention(dim=dim, num_heads=num_heads) # 第一次前向传播 x1 = torch.randn(batch_size, seq_len1, dim) output1, kv_cache1 = attn(x1, use_cache=True) # 第二次前向传播（使用缓存） x2 = torch.randn(batch_size, seq_len2, dim) output2, kv_cache2 = attn(x2, kv_cache=kv_cache1, use_cache=True) # 一次性处理所有token（用于验证） x_all = torch.cat([x1, x2], dim=1) output_all, _ = attn(x_all, use_cache=False) # 检查结果是否一致 output2_from_all = output_all[:, seq_len1:, :] # 允许小的数值误差 tolerance = 1e-5 if torch.allclose(output2, output2_from_all, rtol=tolerance, atol=tolerance): print(&#34;✓ KV缓存测试通过：增量推理与一次性计算结果一致&#34;) return True else: print(&#34;✗ KV缓存测试失败：结果不一致&#34;) max_diff = torch.max(torch.abs(output2 - output2_from_all)) print(f&#34;最大差异: {max_diff.item()}&#34;) return False if __name__ == &#34;__main__&#34;: print(&#34;带KV缓存的自注意力实现&#34;) print(&#34;=&#34; * 50) # 运行测试 test_kv_cache() print(&#34;\\n&#34; + &#34;=&#34; * 50) print(&#34;使用示例：&#34;) example_usage() ">
+<meta property='og:url' content='http://localhost:1313/posts/kacache_attn/'>
+<meta property='og:site_name' content='My New Hugo Site'>
+<meta property='og:type' content='article'><meta property='article:section' content='Posts' />
+<meta name="twitter:title" content="My New Hugo Site">
+<meta name="twitter:description" content="import torch import torch.nn as nn import torch.nn.functional as F import math from typing import Optional, Tuple class KVCacheSelfAttention(nn.Module): &#34;&#34;&#34; 带KV缓存的自注意力模块 支持增量推理，适用于生成式模型 &#34;&#34;&#34; def __init__( self, dim: int, num_heads: int, max_seq_len: int = 2048, dropout: float = 0.0, bias: bool = True, flash_attention: bool = False ): super().__init__() self.dim = dim self.num_heads = num_heads self.head_dim = dim // num_heads self.dropout = dropout self.max_seq_len = max_seq_len self.flash_attention = flash_attention # 检查维度是否能被头数整除 assert self.head_dim * num_heads == dim, &#34;dim必须能被num_heads整除&#34; # 投影层 self.q_proj = nn.Linear(dim, dim, bias=bias) self.k_proj = nn.Linear(dim, dim, bias=bias) self.v_proj = nn.Linear(dim, dim, bias=bias) self.out_proj = nn.Linear(dim, dim, bias=bias) # dropout层 self.attn_dropout = nn.Dropout(dropout) self.resid_dropout = nn.Dropout(dropout) # 缩放因子 self.scale = 1.0 / math.sqrt(self.head_dim) def forward( self, x: torch.Tensor, kv_cache: Optional[Tuple[torch.Tensor, torch.Tensor]] = None, attention_mask: Optional[torch.Tensor] = None, use_cache: bool = False, is_causal: bool = True, past_key_values: Optional[Tuple[torch.Tensor, torch.Tensor]] = None ) -&gt; Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]: &#34;&#34;&#34; 前向传播 参数: x: 输入张量 [batch_size, seq_len, dim] kv_cache: 之前的KV缓存 (key, value) attention_mask: 注意力掩码 use_cache: 是否返回KV缓存 is_causal: 是否使用因果注意力掩码 past_key_values: 之前的键值对（用于兼容一些API） 返回: output: 输出张量 [batch_size, seq_len, dim] kv_cache: 更新后的KV缓存 (key, value) &#34;&#34;&#34; batch_size, seq_len, _ = x.shape # 如果提供了past_key_values，转换为kv_cache格式 if past_key_values is not None and kv_cache is None: kv_cache = past_key_values # 计算Q, K, V q = self.q_proj(x) # [batch_size, seq_len, dim] k = self.k_proj(x) # [batch_size, seq_len, dim] v = self.v_proj(x) # [batch_size, seq_len, dim] # 重塑为多头格式 q = q.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2) k = k.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2) v = v.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2) # 如果使用KV缓存，拼接之前的K和V if kv_cache is not None: k_cache, v_cache = kv_cache # k_cache: [batch_size, num_heads, cache_seq_len, head_dim] # v_cache: [batch_size, num_heads, cache_seq_len, head_dim] k = torch.cat([k_cache, k], dim=2) v = torch.cat([v_cache, v], dim=2) # 准备返回的缓存 new_kv_cache = (k, v) if use_cache else None # 计算注意力分数 if self.flash_attention and torch.cuda.is_available() and is_causal: # 使用Flash Attention（如果可用） output = self._flash_attention(q, k, v, attention_mask, is_causal) else: # 标准注意力实现 output = self._standard_attention(q, k, v, attention_mask, is_causal) # 重塑输出 output = output.transpose(1, 2).contiguous().view(batch_size, seq_len, self.dim) # 输出投影和dropout output = self.out_proj(output) output = self.resid_dropout(output) return output, new_kv_cache def _standard_attention( self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, attention_mask: Optional[torch.Tensor], is_causal: bool ) -&gt; torch.Tensor: &#34;&#34;&#34;标准注意力实现&#34;&#34;&#34; batch_size, num_heads, q_seq_len, head_dim = q.shape _, _, k_seq_len, _ = k.shape # 计算注意力分数 attn_scores = torch.matmul(q, k.transpose(-2, -1)) * self.scale # 应用因果掩码（如果需要） if is_causal and attention_mask is None: # 创建因果掩码 causal_mask = torch.tril( torch.ones((q_seq_len, k_seq_len), dtype=torch.bool, device=q.device) ) causal_mask = causal_mask.view(1, 1, q_seq_len, k_seq_len) attn_scores = attn_scores.masked_fill(~causal_mask, float(&#39;-inf&#39;)) # 应用外部提供的注意力掩码 if attention_mask is not None: # attention_mask: [batch_size, 1, q_seq_len, k_seq_len] 或 [batch_size, q_seq_len, k_seq_len] if attention_mask.dim() == 3: attention_mask = attention_mask.unsqueeze(1) attn_scores = attn_scores + attention_mask # 应用softmax attn_probs = F.softmax(attn_scores, dim=-1) attn_probs = self.attn_dropout(attn_probs) # 计算输出 output = torch.matmul(attn_probs, v) return output def _flash_attention( self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, attention_mask: Optional[torch.Tensor], is_causal: bool ) -&gt; torch.Tensor: &#34;&#34;&#34;Flash Attention实现（需要PyTorch 2.0+）&#34;&#34;&#34; try: import torch.nn.functional as F # 使用scaled_dot_product_attention output = F.scaled_dot_product_attention( q, k, v, attn_mask=attention_mask, dropout_p=self.dropout if self.training else 0.0, is_causal=is_causal ) return output except ImportError: # 如果Flash Attention不可用，回退到标准注意力 return self._standard_attention(q, k, v, attention_mask, is_causal) class KVCacheManager: &#34;&#34;&#34; KV缓存管理器，用于管理多个层的KV缓存 &#34;&#34;&#34; def __init__(self, num_layers: int): self.num_layers = num_layers self.cache = [None] * num_layers def init_cache(self, batch_size: int, max_length: int, device: torch.device): &#34;&#34;&#34;初始化缓存&#34;&#34;&#34; self.cache = [None] * self.num_layers def update_cache(self, layer_idx: int, new_cache: Tuple[torch.Tensor, torch.Tensor]): &#34;&#34;&#34;更新指定层的缓存&#34;&#34;&#34; self.cache[layer_idx] = new_cache def get_cache(self, layer_idx: int) -&gt; Optional[Tuple[torch.Tensor, torch.Tensor]]: &#34;&#34;&#34;获取指定层的缓存&#34;&#34;&#34; if layer_idx &lt; len(self.cache): return self.cache[layer_idx] return None def clear_cache(self): &#34;&#34;&#34;清空所有缓存&#34;&#34;&#34; self.cache = [None] * self.num_layers # 使用示例 def example_usage(): # 配置参数 batch_size = 2 seq_len = 10 dim = 512 num_heads = 8 num_layers = 6 # 创建模型 attn_layer = KVCacheSelfAttention(dim=dim, num_heads=num_heads) cache_manager = KVCacheManager(num_layers=num_layers) # 模拟输入 x = torch.randn(batch_size, seq_len, dim) print(&#34;=== 第一次前向传播（无缓存）===&#34;) output1, kv_cache = attn_layer(x, use_cache=True) print(f&#34;输入形状: {x.shape}&#34;) print(f&#34;输出形状: {output1.shape}&#34;) print(f&#34;KV缓存形状: k={kv_cache[0].shape}, v={kv_cache[1].shape}&#34;) # 保存缓存 cache_manager.update_cache(0, kv_cache) print(&#34;\\n=== 第二次前向传播（有缓存，增量推理）===&#34;) # 模拟增量输入（通常是单个token） x_incremental = torch.randn(batch_size, 1, dim) # 获取之前的缓存 past_kv = cache_manager.get_cache(0) output2, new_kv_cache = attn_layer( x_incremental, kv_cache=past_kv, use_cache=True, is_causal=True ) print(f&#34;增量输入形状: {x_incremental.shape}&#34;) print(f&#34;增量输出形状: {output2.shape}&#34;) print(f&#34;新KV缓存形状: k={new_kv_cache[0].shape}, v={new_kv_cache[1].shape}&#34;) # 验证缓存是否正确拼接 print(f&#34;\\n=== 缓存验证 ===&#34;) print(f&#34;原始K形状: {past_kv[0].shape if past_kv else &#39;无&#39;}&#34;) print(f&#34;新增K形状: {x_incremental.shape}&#34;) print(f&#34;拼接后K形状: {new_kv_cache[0].shape}&#34;) print(f&#34;缓存序列长度增加: {new_kv_cache[0].shape[2] - (past_kv[0].shape[2] if past_kv else 0)}&#34;) # 测试函数 def test_kv_cache(): &#34;&#34;&#34;测试KV缓存功能&#34;&#34;&#34; torch.manual_seed(42) # 简单测试 dim = 64 num_heads = 4 batch_size = 1 seq_len1 = 5 seq_len2 = 3 attn = KVCacheSelfAttention(dim=dim, num_heads=num_heads) # 第一次前向传播 x1 = torch.randn(batch_size, seq_len1, dim) output1, kv_cache1 = attn(x1, use_cache=True) # 第二次前向传播（使用缓存） x2 = torch.randn(batch_size, seq_len2, dim) output2, kv_cache2 = attn(x2, kv_cache=kv_cache1, use_cache=True) # 一次性处理所有token（用于验证） x_all = torch.cat([x1, x2], dim=1) output_all, _ = attn(x_all, use_cache=False) # 检查结果是否一致 output2_from_all = output_all[:, seq_len1:, :] # 允许小的数值误差 tolerance = 1e-5 if torch.allclose(output2, output2_from_all, rtol=tolerance, atol=tolerance): print(&#34;✓ KV缓存测试通过：增量推理与一次性计算结果一致&#34;) return True else: print(&#34;✗ KV缓存测试失败：结果不一致&#34;) max_diff = torch.max(torch.abs(output2 - output2_from_all)) print(f&#34;最大差异: {max_diff.item()}&#34;) return False if __name__ == &#34;__main__&#34;: print(&#34;带KV缓存的自注意力实现&#34;) print(&#34;=&#34; * 50) # 运行测试 test_kv_cache() print(&#34;\\n&#34; + &#34;=&#34; * 50) print(&#34;使用示例：&#34;) example_usage() ">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column compact"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="Toggle Menu">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">My New Hugo Site</a></h1>
+            <h2 class="site-description"></h2>
+        </div>
+    </header><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>Dark Mode</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/posts/kacache_attn/"></a>
+        </h2>
+    
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <footer class="article-meta">
+        
+            <div class="inline-meta">
+                
+
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        4 minutes read
+                    </time>
+                
+            </div>
+        
+
+        
+
+        
+    </footer>
+    
+</div>
+
+</header>
+
+    
+
+    <section class="article-content">
+    
+    
+    <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">import</span> torch
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> torch.nn <span style="color:#66d9ef">as</span> nn
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> torch.nn.functional <span style="color:#66d9ef">as</span> F
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> math
+</span></span><span style="display:flex;"><span><span style="color:#f92672">from</span> typing <span style="color:#f92672">import</span> Optional, Tuple
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">class</span> <span style="color:#a6e22e">KVCacheSelfAttention</span>(nn<span style="color:#f92672">.</span>Module):
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;&#34;&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">    带KV缓存的自注意力模块
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">    支持增量推理，适用于生成式模型
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">    &#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">def</span> <span style="color:#a6e22e">__init__</span>(
+</span></span><span style="display:flex;"><span>        self,
+</span></span><span style="display:flex;"><span>        dim: int,
+</span></span><span style="display:flex;"><span>        num_heads: int,
+</span></span><span style="display:flex;"><span>        max_seq_len: int <span style="color:#f92672">=</span> <span style="color:#ae81ff">2048</span>,
+</span></span><span style="display:flex;"><span>        dropout: float <span style="color:#f92672">=</span> <span style="color:#ae81ff">0.0</span>,
+</span></span><span style="display:flex;"><span>        bias: bool <span style="color:#f92672">=</span> <span style="color:#66d9ef">True</span>,
+</span></span><span style="display:flex;"><span>        flash_attention: bool <span style="color:#f92672">=</span> <span style="color:#66d9ef">False</span>
+</span></span><span style="display:flex;"><span>    ):
+</span></span><span style="display:flex;"><span>        super()<span style="color:#f92672">.</span><span style="color:#a6e22e">__init__</span>()
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>dim <span style="color:#f92672">=</span> dim
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>num_heads <span style="color:#f92672">=</span> num_heads
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>head_dim <span style="color:#f92672">=</span> dim <span style="color:#f92672">//</span> num_heads
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>dropout <span style="color:#f92672">=</span> dropout
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>max_seq_len <span style="color:#f92672">=</span> max_seq_len
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>flash_attention <span style="color:#f92672">=</span> flash_attention
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 检查维度是否能被头数整除</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">assert</span> self<span style="color:#f92672">.</span>head_dim <span style="color:#f92672">*</span> num_heads <span style="color:#f92672">==</span> dim, <span style="color:#e6db74">&#34;dim必须能被num_heads整除&#34;</span>
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 投影层</span>
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>q_proj <span style="color:#f92672">=</span> nn<span style="color:#f92672">.</span>Linear(dim, dim, bias<span style="color:#f92672">=</span>bias)
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>k_proj <span style="color:#f92672">=</span> nn<span style="color:#f92672">.</span>Linear(dim, dim, bias<span style="color:#f92672">=</span>bias)
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>v_proj <span style="color:#f92672">=</span> nn<span style="color:#f92672">.</span>Linear(dim, dim, bias<span style="color:#f92672">=</span>bias)
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>out_proj <span style="color:#f92672">=</span> nn<span style="color:#f92672">.</span>Linear(dim, dim, bias<span style="color:#f92672">=</span>bias)
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># dropout层</span>
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>attn_dropout <span style="color:#f92672">=</span> nn<span style="color:#f92672">.</span>Dropout(dropout)
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>resid_dropout <span style="color:#f92672">=</span> nn<span style="color:#f92672">.</span>Dropout(dropout)
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 缩放因子</span>
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>scale <span style="color:#f92672">=</span> <span style="color:#ae81ff">1.0</span> <span style="color:#f92672">/</span> math<span style="color:#f92672">.</span>sqrt(self<span style="color:#f92672">.</span>head_dim)
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">def</span> <span style="color:#a6e22e">forward</span>(
+</span></span><span style="display:flex;"><span>        self,
+</span></span><span style="display:flex;"><span>        x: torch<span style="color:#f92672">.</span>Tensor,
+</span></span><span style="display:flex;"><span>        kv_cache: Optional[Tuple[torch<span style="color:#f92672">.</span>Tensor, torch<span style="color:#f92672">.</span>Tensor]] <span style="color:#f92672">=</span> <span style="color:#66d9ef">None</span>,
+</span></span><span style="display:flex;"><span>        attention_mask: Optional[torch<span style="color:#f92672">.</span>Tensor] <span style="color:#f92672">=</span> <span style="color:#66d9ef">None</span>,
+</span></span><span style="display:flex;"><span>        use_cache: bool <span style="color:#f92672">=</span> <span style="color:#66d9ef">False</span>,
+</span></span><span style="display:flex;"><span>        is_causal: bool <span style="color:#f92672">=</span> <span style="color:#66d9ef">True</span>,
+</span></span><span style="display:flex;"><span>        past_key_values: Optional[Tuple[torch<span style="color:#f92672">.</span>Tensor, torch<span style="color:#f92672">.</span>Tensor]] <span style="color:#f92672">=</span> <span style="color:#66d9ef">None</span>
+</span></span><span style="display:flex;"><span>    ) <span style="color:#f92672">-&gt;</span> Tuple[torch<span style="color:#f92672">.</span>Tensor, Optional[Tuple[torch<span style="color:#f92672">.</span>Tensor, torch<span style="color:#f92672">.</span>Tensor]]]:
+</span></span><span style="display:flex;"><span>        <span style="color:#e6db74">&#34;&#34;&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        前向传播
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        参数:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            x: 输入张量 [batch_size, seq_len, dim]
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            kv_cache: 之前的KV缓存 (key, value)
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            attention_mask: 注意力掩码
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            use_cache: 是否返回KV缓存
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            is_causal: 是否使用因果注意力掩码
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            past_key_values: 之前的键值对（用于兼容一些API）
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        返回:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            output: 输出张量 [batch_size, seq_len, dim]
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            kv_cache: 更新后的KV缓存 (key, value)
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        &#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span>        batch_size, seq_len, _ <span style="color:#f92672">=</span> x<span style="color:#f92672">.</span>shape
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 如果提供了past_key_values，转换为kv_cache格式</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> past_key_values <span style="color:#f92672">is</span> <span style="color:#f92672">not</span> <span style="color:#66d9ef">None</span> <span style="color:#f92672">and</span> kv_cache <span style="color:#f92672">is</span> <span style="color:#66d9ef">None</span>:
+</span></span><span style="display:flex;"><span>            kv_cache <span style="color:#f92672">=</span> past_key_values
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 计算Q, K, V</span>
+</span></span><span style="display:flex;"><span>        q <span style="color:#f92672">=</span> self<span style="color:#f92672">.</span>q_proj(x)  <span style="color:#75715e"># [batch_size, seq_len, dim]</span>
+</span></span><span style="display:flex;"><span>        k <span style="color:#f92672">=</span> self<span style="color:#f92672">.</span>k_proj(x)  <span style="color:#75715e"># [batch_size, seq_len, dim]</span>
+</span></span><span style="display:flex;"><span>        v <span style="color:#f92672">=</span> self<span style="color:#f92672">.</span>v_proj(x)  <span style="color:#75715e"># [batch_size, seq_len, dim]</span>
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 重塑为多头格式</span>
+</span></span><span style="display:flex;"><span>        q <span style="color:#f92672">=</span> q<span style="color:#f92672">.</span>view(batch_size, seq_len, self<span style="color:#f92672">.</span>num_heads, self<span style="color:#f92672">.</span>head_dim)<span style="color:#f92672">.</span>transpose(<span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">2</span>)
+</span></span><span style="display:flex;"><span>        k <span style="color:#f92672">=</span> k<span style="color:#f92672">.</span>view(batch_size, seq_len, self<span style="color:#f92672">.</span>num_heads, self<span style="color:#f92672">.</span>head_dim)<span style="color:#f92672">.</span>transpose(<span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">2</span>)
+</span></span><span style="display:flex;"><span>        v <span style="color:#f92672">=</span> v<span style="color:#f92672">.</span>view(batch_size, seq_len, self<span style="color:#f92672">.</span>num_heads, self<span style="color:#f92672">.</span>head_dim)<span style="color:#f92672">.</span>transpose(<span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">2</span>)
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 如果使用KV缓存，拼接之前的K和V</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> kv_cache <span style="color:#f92672">is</span> <span style="color:#f92672">not</span> <span style="color:#66d9ef">None</span>:
+</span></span><span style="display:flex;"><span>            k_cache, v_cache <span style="color:#f92672">=</span> kv_cache
+</span></span><span style="display:flex;"><span>            <span style="color:#75715e"># k_cache: [batch_size, num_heads, cache_seq_len, head_dim]</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#75715e"># v_cache: [batch_size, num_heads, cache_seq_len, head_dim]</span>
+</span></span><span style="display:flex;"><span>            k <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>cat([k_cache, k], dim<span style="color:#f92672">=</span><span style="color:#ae81ff">2</span>)
+</span></span><span style="display:flex;"><span>            v <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>cat([v_cache, v], dim<span style="color:#f92672">=</span><span style="color:#ae81ff">2</span>)
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 准备返回的缓存</span>
+</span></span><span style="display:flex;"><span>        new_kv_cache <span style="color:#f92672">=</span> (k, v) <span style="color:#66d9ef">if</span> use_cache <span style="color:#66d9ef">else</span> <span style="color:#66d9ef">None</span>
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 计算注意力分数</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> self<span style="color:#f92672">.</span>flash_attention <span style="color:#f92672">and</span> torch<span style="color:#f92672">.</span>cuda<span style="color:#f92672">.</span>is_available() <span style="color:#f92672">and</span> is_causal:
+</span></span><span style="display:flex;"><span>            <span style="color:#75715e"># 使用Flash Attention（如果可用）</span>
+</span></span><span style="display:flex;"><span>            output <span style="color:#f92672">=</span> self<span style="color:#f92672">.</span>_flash_attention(q, k, v, attention_mask, is_causal)
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>            <span style="color:#75715e"># 标准注意力实现</span>
+</span></span><span style="display:flex;"><span>            output <span style="color:#f92672">=</span> self<span style="color:#f92672">.</span>_standard_attention(q, k, v, attention_mask, is_causal)
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 重塑输出</span>
+</span></span><span style="display:flex;"><span>        output <span style="color:#f92672">=</span> output<span style="color:#f92672">.</span>transpose(<span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">2</span>)<span style="color:#f92672">.</span>contiguous()<span style="color:#f92672">.</span>view(batch_size, seq_len, self<span style="color:#f92672">.</span>dim)
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 输出投影和dropout</span>
+</span></span><span style="display:flex;"><span>        output <span style="color:#f92672">=</span> self<span style="color:#f92672">.</span>out_proj(output)
+</span></span><span style="display:flex;"><span>        output <span style="color:#f92672">=</span> self<span style="color:#f92672">.</span>resid_dropout(output)
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> output, new_kv_cache
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">def</span> <span style="color:#a6e22e">_standard_attention</span>(
+</span></span><span style="display:flex;"><span>        self,
+</span></span><span style="display:flex;"><span>        q: torch<span style="color:#f92672">.</span>Tensor,
+</span></span><span style="display:flex;"><span>        k: torch<span style="color:#f92672">.</span>Tensor,
+</span></span><span style="display:flex;"><span>        v: torch<span style="color:#f92672">.</span>Tensor,
+</span></span><span style="display:flex;"><span>        attention_mask: Optional[torch<span style="color:#f92672">.</span>Tensor],
+</span></span><span style="display:flex;"><span>        is_causal: bool
+</span></span><span style="display:flex;"><span>    ) <span style="color:#f92672">-&gt;</span> torch<span style="color:#f92672">.</span>Tensor:
+</span></span><span style="display:flex;"><span>        <span style="color:#e6db74">&#34;&#34;&#34;标准注意力实现&#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span>        batch_size, num_heads, q_seq_len, head_dim <span style="color:#f92672">=</span> q<span style="color:#f92672">.</span>shape
+</span></span><span style="display:flex;"><span>        _, _, k_seq_len, _ <span style="color:#f92672">=</span> k<span style="color:#f92672">.</span>shape
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 计算注意力分数</span>
+</span></span><span style="display:flex;"><span>        attn_scores <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>matmul(q, k<span style="color:#f92672">.</span>transpose(<span style="color:#f92672">-</span><span style="color:#ae81ff">2</span>, <span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>)) <span style="color:#f92672">*</span> self<span style="color:#f92672">.</span>scale
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 应用因果掩码（如果需要）</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> is_causal <span style="color:#f92672">and</span> attention_mask <span style="color:#f92672">is</span> <span style="color:#66d9ef">None</span>:
+</span></span><span style="display:flex;"><span>            <span style="color:#75715e"># 创建因果掩码</span>
+</span></span><span style="display:flex;"><span>            causal_mask <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>tril(
+</span></span><span style="display:flex;"><span>                torch<span style="color:#f92672">.</span>ones((q_seq_len, k_seq_len), dtype<span style="color:#f92672">=</span>torch<span style="color:#f92672">.</span>bool, device<span style="color:#f92672">=</span>q<span style="color:#f92672">.</span>device)
+</span></span><span style="display:flex;"><span>            )
+</span></span><span style="display:flex;"><span>            causal_mask <span style="color:#f92672">=</span> causal_mask<span style="color:#f92672">.</span>view(<span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">1</span>, q_seq_len, k_seq_len)
+</span></span><span style="display:flex;"><span>            attn_scores <span style="color:#f92672">=</span> attn_scores<span style="color:#f92672">.</span>masked_fill(<span style="color:#f92672">~</span>causal_mask, float(<span style="color:#e6db74">&#39;-inf&#39;</span>))
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 应用外部提供的注意力掩码</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> attention_mask <span style="color:#f92672">is</span> <span style="color:#f92672">not</span> <span style="color:#66d9ef">None</span>:
+</span></span><span style="display:flex;"><span>            <span style="color:#75715e"># attention_mask: [batch_size, 1, q_seq_len, k_seq_len] 或 [batch_size, q_seq_len, k_seq_len]</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">if</span> attention_mask<span style="color:#f92672">.</span>dim() <span style="color:#f92672">==</span> <span style="color:#ae81ff">3</span>:
+</span></span><span style="display:flex;"><span>                attention_mask <span style="color:#f92672">=</span> attention_mask<span style="color:#f92672">.</span>unsqueeze(<span style="color:#ae81ff">1</span>)
+</span></span><span style="display:flex;"><span>            attn_scores <span style="color:#f92672">=</span> attn_scores <span style="color:#f92672">+</span> attention_mask
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 应用softmax</span>
+</span></span><span style="display:flex;"><span>        attn_probs <span style="color:#f92672">=</span> F<span style="color:#f92672">.</span>softmax(attn_scores, dim<span style="color:#f92672">=-</span><span style="color:#ae81ff">1</span>)
+</span></span><span style="display:flex;"><span>        attn_probs <span style="color:#f92672">=</span> self<span style="color:#f92672">.</span>attn_dropout(attn_probs)
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e"># 计算输出</span>
+</span></span><span style="display:flex;"><span>        output <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>matmul(attn_probs, v)
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> output
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">def</span> <span style="color:#a6e22e">_flash_attention</span>(
+</span></span><span style="display:flex;"><span>        self,
+</span></span><span style="display:flex;"><span>        q: torch<span style="color:#f92672">.</span>Tensor,
+</span></span><span style="display:flex;"><span>        k: torch<span style="color:#f92672">.</span>Tensor,
+</span></span><span style="display:flex;"><span>        v: torch<span style="color:#f92672">.</span>Tensor,
+</span></span><span style="display:flex;"><span>        attention_mask: Optional[torch<span style="color:#f92672">.</span>Tensor],
+</span></span><span style="display:flex;"><span>        is_causal: bool
+</span></span><span style="display:flex;"><span>    ) <span style="color:#f92672">-&gt;</span> torch<span style="color:#f92672">.</span>Tensor:
+</span></span><span style="display:flex;"><span>        <span style="color:#e6db74">&#34;&#34;&#34;Flash Attention实现（需要PyTorch 2.0+）&#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">try</span>:
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">import</span> torch.nn.functional <span style="color:#66d9ef">as</span> F
+</span></span><span style="display:flex;"><span>            
+</span></span><span style="display:flex;"><span>            <span style="color:#75715e"># 使用scaled_dot_product_attention</span>
+</span></span><span style="display:flex;"><span>            output <span style="color:#f92672">=</span> F<span style="color:#f92672">.</span>scaled_dot_product_attention(
+</span></span><span style="display:flex;"><span>                q, k, v,
+</span></span><span style="display:flex;"><span>                attn_mask<span style="color:#f92672">=</span>attention_mask,
+</span></span><span style="display:flex;"><span>                dropout_p<span style="color:#f92672">=</span>self<span style="color:#f92672">.</span>dropout <span style="color:#66d9ef">if</span> self<span style="color:#f92672">.</span>training <span style="color:#66d9ef">else</span> <span style="color:#ae81ff">0.0</span>,
+</span></span><span style="display:flex;"><span>                is_causal<span style="color:#f92672">=</span>is_causal
+</span></span><span style="display:flex;"><span>            )
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">return</span> output
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">except</span> <span style="color:#a6e22e">ImportError</span>:
+</span></span><span style="display:flex;"><span>            <span style="color:#75715e"># 如果Flash Attention不可用，回退到标准注意力</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">return</span> self<span style="color:#f92672">.</span>_standard_attention(q, k, v, attention_mask, is_causal)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">class</span> <span style="color:#a6e22e">KVCacheManager</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;&#34;&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">    KV缓存管理器，用于管理多个层的KV缓存
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">    &#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">def</span> <span style="color:#a6e22e">__init__</span>(self, num_layers: int):
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>num_layers <span style="color:#f92672">=</span> num_layers
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>cache <span style="color:#f92672">=</span> [<span style="color:#66d9ef">None</span>] <span style="color:#f92672">*</span> num_layers
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">def</span> <span style="color:#a6e22e">init_cache</span>(self, batch_size: int, max_length: int, device: torch<span style="color:#f92672">.</span>device):
+</span></span><span style="display:flex;"><span>        <span style="color:#e6db74">&#34;&#34;&#34;初始化缓存&#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>cache <span style="color:#f92672">=</span> [<span style="color:#66d9ef">None</span>] <span style="color:#f92672">*</span> self<span style="color:#f92672">.</span>num_layers
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">def</span> <span style="color:#a6e22e">update_cache</span>(self, layer_idx: int, new_cache: Tuple[torch<span style="color:#f92672">.</span>Tensor, torch<span style="color:#f92672">.</span>Tensor]):
+</span></span><span style="display:flex;"><span>        <span style="color:#e6db74">&#34;&#34;&#34;更新指定层的缓存&#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>cache[layer_idx] <span style="color:#f92672">=</span> new_cache
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">def</span> <span style="color:#a6e22e">get_cache</span>(self, layer_idx: int) <span style="color:#f92672">-&gt;</span> Optional[Tuple[torch<span style="color:#f92672">.</span>Tensor, torch<span style="color:#f92672">.</span>Tensor]]:
+</span></span><span style="display:flex;"><span>        <span style="color:#e6db74">&#34;&#34;&#34;获取指定层的缓存&#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> layer_idx <span style="color:#f92672">&lt;</span> len(self<span style="color:#f92672">.</span>cache):
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">return</span> self<span style="color:#f92672">.</span>cache[layer_idx]
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">None</span>
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">def</span> <span style="color:#a6e22e">clear_cache</span>(self):
+</span></span><span style="display:flex;"><span>        <span style="color:#e6db74">&#34;&#34;&#34;清空所有缓存&#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span>        self<span style="color:#f92672">.</span>cache <span style="color:#f92672">=</span> [<span style="color:#66d9ef">None</span>] <span style="color:#f92672">*</span> self<span style="color:#f92672">.</span>num_layers
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># 使用示例</span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">example_usage</span>():
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># 配置参数</span>
+</span></span><span style="display:flex;"><span>    batch_size <span style="color:#f92672">=</span> <span style="color:#ae81ff">2</span>
+</span></span><span style="display:flex;"><span>    seq_len <span style="color:#f92672">=</span> <span style="color:#ae81ff">10</span>
+</span></span><span style="display:flex;"><span>    dim <span style="color:#f92672">=</span> <span style="color:#ae81ff">512</span>
+</span></span><span style="display:flex;"><span>    num_heads <span style="color:#f92672">=</span> <span style="color:#ae81ff">8</span>
+</span></span><span style="display:flex;"><span>    num_layers <span style="color:#f92672">=</span> <span style="color:#ae81ff">6</span>
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># 创建模型</span>
+</span></span><span style="display:flex;"><span>    attn_layer <span style="color:#f92672">=</span> KVCacheSelfAttention(dim<span style="color:#f92672">=</span>dim, num_heads<span style="color:#f92672">=</span>num_heads)
+</span></span><span style="display:flex;"><span>    cache_manager <span style="color:#f92672">=</span> KVCacheManager(num_layers<span style="color:#f92672">=</span>num_layers)
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># 模拟输入</span>
+</span></span><span style="display:flex;"><span>    x <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>randn(batch_size, seq_len, dim)
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">&#34;=== 第一次前向传播（无缓存）===&#34;</span>)
+</span></span><span style="display:flex;"><span>    output1, kv_cache <span style="color:#f92672">=</span> attn_layer(x, use_cache<span style="color:#f92672">=</span><span style="color:#66d9ef">True</span>)
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;输入形状: </span><span style="color:#e6db74">{</span>x<span style="color:#f92672">.</span>shape<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;输出形状: </span><span style="color:#e6db74">{</span>output1<span style="color:#f92672">.</span>shape<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;KV缓存形状: k=</span><span style="color:#e6db74">{</span>kv_cache[<span style="color:#ae81ff">0</span>]<span style="color:#f92672">.</span>shape<span style="color:#e6db74">}</span><span style="color:#e6db74">, v=</span><span style="color:#e6db74">{</span>kv_cache[<span style="color:#ae81ff">1</span>]<span style="color:#f92672">.</span>shape<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># 保存缓存</span>
+</span></span><span style="display:flex;"><span>    cache_manager<span style="color:#f92672">.</span>update_cache(<span style="color:#ae81ff">0</span>, kv_cache)
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">&#34;</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">=== 第二次前向传播（有缓存，增量推理）===&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># 模拟增量输入（通常是单个token）</span>
+</span></span><span style="display:flex;"><span>    x_incremental <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>randn(batch_size, <span style="color:#ae81ff">1</span>, dim)
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># 获取之前的缓存</span>
+</span></span><span style="display:flex;"><span>    past_kv <span style="color:#f92672">=</span> cache_manager<span style="color:#f92672">.</span>get_cache(<span style="color:#ae81ff">0</span>)
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    output2, new_kv_cache <span style="color:#f92672">=</span> attn_layer(
+</span></span><span style="display:flex;"><span>        x_incremental,
+</span></span><span style="display:flex;"><span>        kv_cache<span style="color:#f92672">=</span>past_kv,
+</span></span><span style="display:flex;"><span>        use_cache<span style="color:#f92672">=</span><span style="color:#66d9ef">True</span>,
+</span></span><span style="display:flex;"><span>        is_causal<span style="color:#f92672">=</span><span style="color:#66d9ef">True</span>
+</span></span><span style="display:flex;"><span>    )
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;增量输入形状: </span><span style="color:#e6db74">{</span>x_incremental<span style="color:#f92672">.</span>shape<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;增量输出形状: </span><span style="color:#e6db74">{</span>output2<span style="color:#f92672">.</span>shape<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;新KV缓存形状: k=</span><span style="color:#e6db74">{</span>new_kv_cache[<span style="color:#ae81ff">0</span>]<span style="color:#f92672">.</span>shape<span style="color:#e6db74">}</span><span style="color:#e6db74">, v=</span><span style="color:#e6db74">{</span>new_kv_cache[<span style="color:#ae81ff">1</span>]<span style="color:#f92672">.</span>shape<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># 验证缓存是否正确拼接</span>
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">=== 缓存验证 ===&#34;</span>)
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;原始K形状: </span><span style="color:#e6db74">{</span>past_kv[<span style="color:#ae81ff">0</span>]<span style="color:#f92672">.</span>shape <span style="color:#66d9ef">if</span> past_kv <span style="color:#66d9ef">else</span> <span style="color:#e6db74">&#39;无&#39;</span><span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;新增K形状: </span><span style="color:#e6db74">{</span>x_incremental<span style="color:#f92672">.</span>shape<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;拼接后K形状: </span><span style="color:#e6db74">{</span>new_kv_cache[<span style="color:#ae81ff">0</span>]<span style="color:#f92672">.</span>shape<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;缓存序列长度增加: </span><span style="color:#e6db74">{</span>new_kv_cache[<span style="color:#ae81ff">0</span>]<span style="color:#f92672">.</span>shape[<span style="color:#ae81ff">2</span>] <span style="color:#f92672">-</span> (past_kv[<span style="color:#ae81ff">0</span>]<span style="color:#f92672">.</span>shape[<span style="color:#ae81ff">2</span>] <span style="color:#66d9ef">if</span> past_kv <span style="color:#66d9ef">else</span> <span style="color:#ae81ff">0</span>)<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># 测试函数</span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">test_kv_cache</span>():
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;&#34;&#34;测试KV缓存功能&#34;&#34;&#34;</span>
+</span></span><span style="display:flex;"><span>    torch<span style="color:#f92672">.</span>manual_seed(<span style="color:#ae81ff">42</span>)
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># 简单测试</span>
+</span></span><span style="display:flex;"><span>    dim <span style="color:#f92672">=</span> <span style="color:#ae81ff">64</span>
+</span></span><span style="display:flex;"><span>    num_heads <span style="color:#f92672">=</span> <span style="color:#ae81ff">4</span>
+</span></span><span style="display:flex;"><span>    batch_size <span style="color:#f92672">=</span> <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>    seq_len1 <span style="color:#f92672">=</span> <span style="color:#ae81ff">5</span>
+</span></span><span style="display:flex;"><span>    seq_len2 <span style="color:#f92672">=</span> <span style="color:#ae81ff">3</span>
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    attn <span style="color:#f92672">=</span> KVCacheSelfAttention(dim<span style="color:#f92672">=</span>dim, num_heads<span style="color:#f92672">=</span>num_heads)
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># 第一次前向传播</span>
+</span></span><span style="display:flex;"><span>    x1 <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>randn(batch_size, seq_len1, dim)
+</span></span><span style="display:flex;"><span>    output1, kv_cache1 <span style="color:#f92672">=</span> attn(x1, use_cache<span style="color:#f92672">=</span><span style="color:#66d9ef">True</span>)
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># 第二次前向传播（使用缓存）</span>
+</span></span><span style="display:flex;"><span>    x2 <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>randn(batch_size, seq_len2, dim)
+</span></span><span style="display:flex;"><span>    output2, kv_cache2 <span style="color:#f92672">=</span> attn(x2, kv_cache<span style="color:#f92672">=</span>kv_cache1, use_cache<span style="color:#f92672">=</span><span style="color:#66d9ef">True</span>)
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># 一次性处理所有token（用于验证）</span>
+</span></span><span style="display:flex;"><span>    x_all <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>cat([x1, x2], dim<span style="color:#f92672">=</span><span style="color:#ae81ff">1</span>)
+</span></span><span style="display:flex;"><span>    output_all, _ <span style="color:#f92672">=</span> attn(x_all, use_cache<span style="color:#f92672">=</span><span style="color:#66d9ef">False</span>)
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># 检查结果是否一致</span>
+</span></span><span style="display:flex;"><span>    output2_from_all <span style="color:#f92672">=</span> output_all[:, seq_len1:, :]
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># 允许小的数值误差</span>
+</span></span><span style="display:flex;"><span>    tolerance <span style="color:#f92672">=</span> <span style="color:#ae81ff">1e-5</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> torch<span style="color:#f92672">.</span>allclose(output2, output2_from_all, rtol<span style="color:#f92672">=</span>tolerance, atol<span style="color:#f92672">=</span>tolerance):
+</span></span><span style="display:flex;"><span>        print(<span style="color:#e6db74">&#34;✓ KV缓存测试通过：增量推理与一次性计算结果一致&#34;</span>)
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">True</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>        print(<span style="color:#e6db74">&#34;✗ KV缓存测试失败：结果不一致&#34;</span>)
+</span></span><span style="display:flex;"><span>        max_diff <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>max(torch<span style="color:#f92672">.</span>abs(output2 <span style="color:#f92672">-</span> output2_from_all))
+</span></span><span style="display:flex;"><span>        print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;最大差异: </span><span style="color:#e6db74">{</span>max_diff<span style="color:#f92672">.</span>item()<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">False</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">if</span> __name__ <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;__main__&#34;</span>:
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">&#34;带KV缓存的自注意力实现&#34;</span>)
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">&#34;=&#34;</span> <span style="color:#f92672">*</span> <span style="color:#ae81ff">50</span>)
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># 运行测试</span>
+</span></span><span style="display:flex;"><span>    test_kv_cache()
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">&#34;</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span> <span style="color:#f92672">+</span> <span style="color:#e6db74">&#34;=&#34;</span> <span style="color:#f92672">*</span> <span style="color:#ae81ff">50</span>)
+</span></span><span style="display:flex;"><span>    print(<span style="color:#e6db74">&#34;使用示例：&#34;</span>)
+</span></span><span style="display:flex;"><span>    example_usage()
+</span></span></code></pre></div>
+</section>
+
+
+    <footer class="article-meta article-footer">
+    
+
+    </footer>
+
+
+    
+</article>
+
+    
+
+    
+
+     
+    
+        
+        <div class="disqus-container">
+    
+</div>
+
+<style>
+    .disqus-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+</style>
+
+<script>
+    window.addEventListener('onColorSchemeChange', (e) => {
+        if (typeof DISQUS == 'object') {
+            DISQUS.reset({
+                reload: true
+            });
+        }
+    })
+</script>
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+        2026 My New Hugo Site
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="4.0.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+
+    
+
+
+
+<script type="module">
+    import gallery from '\/ts\/gallery.js';
+
+    const articleContent = document.querySelector('.article-content');
+    const shouldLoad = articleContent && (articleContent.querySelectorAll('figure').length > 0 || articleContent.querySelectorAll('img.gallery-image').length > 0);
+    
+    if (shouldLoad) {
+        gallery(articleContent);
+
+        const PhotoSwipeLightbox = (await import("https:\/\/cdn.jsdelivr.net\/npm\/photoswipe@5.4.4\/dist\/photoswipe-lightbox.esm.min.js")).default;
+        const styleHref = "https:\/\/cdn.jsdelivr.net\/npm\/photoswipe@5.4.4\/dist\/photoswipe.css";
+
+        const styleTag = document.createElement('link');
+        styleTag.rel = 'stylesheet';
+        styleTag.href = styleHref;
+        document.head.appendChild(styleTag);
+
+        const lightbox = new PhotoSwipeLightbox({
+            gallerySelector: '.article-content',
+            childSelector: 'figure a.image-link',
+            pswpModule: () => import("https:\/\/cdn.jsdelivr.net\/npm\/photoswipe@5.4.4\/dist\/photoswipe.esm.min.js")
+        });
+        lightbox.init();
+    }
+</script>
+    
+
+            </main>
+        </div>
+        
+<script type="text/javascript" src="/ts/main.3686cf1f5921e7acff374f8b7c54eebe84f8c39c75e03f58c84c6797bd846028.js" defer></script>
+
+
+    </body>
+</html>
